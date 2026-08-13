@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:kurskart/views/screens/authetication_screens/login_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:kurskart/views/widgets/auth_gate.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {
@@ -12,11 +13,11 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Flutter Demo',
+      title: 'KursKart',
       theme: ThemeData(
         colorScheme: .fromSeed(seedColor: Colors.white.withValues(alpha: 0.95)),
       ),
-      home: LoginScreen(),
+      home: const AuthGate(),
     );
   }
 }

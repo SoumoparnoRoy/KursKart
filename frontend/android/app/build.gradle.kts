@@ -7,7 +7,9 @@ plugins {
 
 android {
     namespace = "com.example.kurskart"
-    compileSdk = flutter.compileSdkVersion
+    // flutter_secure_storage compiles against SDK 37; Flutter's default is 36.
+    // Compile SDK levels are backward compatible, so raising it is safe.
+    compileSdk = maxOf(flutter.compileSdkVersion, 37)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
