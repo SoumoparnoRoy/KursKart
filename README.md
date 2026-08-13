@@ -143,6 +143,42 @@ least 8 characters and emails are stored lowercased and uniquely indexed.
 
 ---
 
+## Deployment
+
+The backend is split so it runs both as a normal server and as a serverless
+function:
+
+```text
+backend/
+├── app.js          # the Express app: middleware, routers, exports the app
+├── index.js        # local dev only — calls app.listen()
+├── db.js           # cached Mongo connection, shared across warm invocations
+├── api/index.js    # serverless entry point, exports the app
+└── vercel.json     # routes every path to the function
+```
+
+To deploy on Vercel:
+
+1. Import the repository and set **Root Directory** to `backend`.
+2. Add `MONGO_URI` and `JWT_SECRET` as environment variables. Do not set `PORT`
+   — the platform provides it.
+3. In Atlas, add `0.0.0.0/0` to Network Access. Serverless IPs rotate, so an IP
+   allowlist cannot work. The database stays password-protected.
+
+Then point the app at it:
+
+```bash
+flutter build apk --release --dart-define=API_URL=https://your-app.vercel.app
+```
+
+`GET /api/health` answers without touching the database, so it can be used to
+wake a sleeping function before a demo and as an uptime check.
+
+Note that release builds are https-only by design, so they cannot talk to a
+local `http://` backend — use a debug build for that.
+
+---
+
 ## Testing
 
 ```bash

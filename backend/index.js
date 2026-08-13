@@ -1,13 +1,10 @@
 require('dotenv').config();
-const express = require('express');
-const mongoose = require('mongoose');
-const authRouter = require('./routes/auth');
-const productRouter = require('./routes/product');
-const storeRouter = require('./routes/store');
-const cartRouter = require('./routes/cart');
-const orderRouter = require('./routes/order');
+const app = require('./app');
+const connectToDatabase = require('./db');
 
 
+// Local development entry point. Vercel never runs this file — it imports the
+// app through api/index.js and does its own listening.
 const PORT = process.env.PORT || 3000;
 
 for (const key of ["MONGO_URI", "JWT_SECRET"]) {
@@ -17,18 +14,11 @@ for (const key of ["MONGO_URI", "JWT_SECRET"]) {
     }
 }
 
-const app = express();
-app.use(express.json());
-app.use(authRouter);
-app.use(productRouter);
-app.use(storeRouter);
-app.use(cartRouter);
-app.use(orderRouter);
-
-mongoose.connect(process.env.MONGO_URI)
+// Connect up front so a local server reports database problems at startup
+// rather than on the first request.
+connectToDatabase()
     .then(() => console.log("MongoDB Connected"))
-    .catch(err => console.log("MongoDB connection error:", err));
-
+    .catch((err) => console.log("MongoDB connection error:", err.message));
 
 app.listen(PORT, "0.0.0.0", function () {
     console.log(`server is running on port ${PORT}`);
