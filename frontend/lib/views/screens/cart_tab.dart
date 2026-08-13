@@ -1,0 +1,368 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:kurskart/models/cart.dart';
+import 'package:kurskart/providers/cart_provider.dart';
+import 'package:kurskart/services/api_client.dart';
+import 'package:kurskart/services/manage_http_response.dart';
+
+class CartTab extends ConsumerWidget {
+  const CartTab({super.key});
+
+  static const _accent = Color.fromARGB(255, 0, 47, 255);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cart = ref.watch(cartProvider);
+
+    return cart.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => _Message(
+        title: 'Could not load your cart',
+        detail: '$e',
+        onRetry: () => ref.read(cartProvider.notifier).refresh(),
+      ),
+      data: (data) => data.isEmpty
+          ? const _Message(
+              title: 'Your cart is empty',
+              detail: 'Browse the Home tab and add something you like.',
+            )
+          : _CartList(cart: data),
+    );
+  }
+}
+
+class _CartList extends ConsumerWidget {
+  const _CartList({required this.cart});
+
+  final Cart cart;
+
+  Future<void> _run(
+    BuildContext context,
+    Future<void> Function() action,
+  ) async {
+    try {
+      await action();
+    } on ApiException catch (e) {
+      if (context.mounted) showSnackBar(context, e.message);
+    } catch (_) {
+      if (context.mounted) {
+        showSnackBar(context, 'Something went wrong. Please try again.');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(cartProvider.notifier);
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+          child: Row(
+            children: [
+              Text(
+                'Your Cart',
+                style: GoogleFonts.lato(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () => _run(context, notifier.clear),
+                child: const Text('Clear'),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: notifier.refresh,
+            child: ListView.separated(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount: cart.items.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (context, i) {
+                final item = cart.items[i];
+                return _CartRow(
+                  item: item,
+                  onDecrease: item.quantity > 1
+                      ? () => _run(
+                          context,
+                          () => notifier.setQuantity(
+                            item.product.id,
+                            item.quantity - 1,
+                          ),
+                        )
+                      : null,
+                  onIncrease: () => _run(
+                    context,
+                    () => notifier.setQuantity(
+                      item.product.id,
+                      item.quantity + 1,
+                    ),
+                  ),
+                  onRemove: () =>
+                      _run(context, () => notifier.remove(item.product.id)),
+                );
+              },
+            ),
+          ),
+        ),
+        _SummaryBar(cart: cart),
+      ],
+    );
+  }
+}
+
+class _CartRow extends StatelessWidget {
+  const _CartRow({
+    required this.item,
+    required this.onDecrease,
+    required this.onIncrease,
+    required this.onRemove,
+  });
+
+  final CartItem item;
+  final VoidCallback? onDecrease;
+  final VoidCallback onIncrease;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = item.product.primaryImage;
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              width: 72,
+              height: 72,
+              child: image == null
+                  ? Container(color: Colors.grey.shade100)
+                  : Image.network(
+                      image,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) =>
+                          Container(color: Colors.grey.shade100),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.product.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.nunitoSans(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+                Text(
+                  item.product.store?.name ?? '',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 12,
+                    color: Colors.black45,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    _QtyButton(icon: Icons.remove, onTap: onDecrease),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        '${item.quantity}',
+                        style: GoogleFonts.nunitoSans(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                    _QtyButton(icon: Icons.add, onTap: onIncrease),
+                    const Spacer(),
+                    Text(
+                      item.formattedLineTotal,
+                      style: GoogleFonts.lato(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: CartTab._accent,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: onRemove,
+            icon: const Icon(Icons.close, size: 18),
+            color: Colors.black38,
+            tooltip: 'Remove',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QtyButton extends StatelessWidget {
+  const _QtyButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: enabled ? Colors.grey.shade400 : Colors.grey.shade200,
+          ),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Icon(
+          icon,
+          size: 16,
+          color: enabled ? Colors.black87 : Colors.black26,
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryBar extends StatelessWidget {
+  const _SummaryBar({required this.cart});
+
+  final Cart cart;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 8,
+      color: Colors.white,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Subtotal (${cart.itemCount} item${cart.itemCount == 1 ? '' : 's'})',
+                    style: GoogleFonts.nunitoSans(
+                      fontSize: 12,
+                      color: Colors.black54,
+                    ),
+                  ),
+                  Text(
+                    cart.formattedSubtotal,
+                    style: GoogleFonts.lato(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: CartTab._accent,
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: CartTab._accent,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                // Orders do not exist yet, so this stays honest rather than
+                // pretending to take a payment.
+                onPressed: () => showSnackBar(context, 'Checkout coming soon'),
+                child: Text(
+                  'Checkout',
+                  style: GoogleFonts.lato(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Message extends StatelessWidget {
+  const _Message({required this.title, required this.detail, this.onRetry});
+
+  final String title;
+  final String detail;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.shopping_cart_outlined,
+              size: 44,
+              color: Colors.grey.shade400,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.lato(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              detail,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.nunitoSans(color: Colors.black54),
+            ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 16),
+              OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}

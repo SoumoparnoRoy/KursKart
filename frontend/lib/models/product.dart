@@ -1,4 +1,5 @@
 import 'package:kurskart/models/store.dart';
+import 'package:kurskart/utils/currency.dart';
 
 class Product {
   const Product({
@@ -32,30 +33,7 @@ class Product {
 
   String? get primaryImage => images.isEmpty ? null : images.first;
 
-  /// e.g. 7499 -> "₹7,499". Grouping is done by hand to avoid pulling in intl
-  /// for a single format.
-  String get formattedPrice {
-    final digits = price.abs().toString();
-    final buffer = StringBuffer();
-
-    // Indian grouping: last three digits, then pairs (7,499 / 1,23,456).
-    if (digits.length <= 3) {
-      buffer.write(digits);
-    } else {
-      final head = digits.substring(0, digits.length - 3);
-      final tail = digits.substring(digits.length - 3);
-      final grouped = <String>[];
-      var rest = head;
-      while (rest.length > 2) {
-        grouped.insert(0, rest.substring(rest.length - 2));
-        rest = rest.substring(0, rest.length - 2);
-      }
-      if (rest.isNotEmpty) grouped.insert(0, rest);
-      buffer.write('${grouped.join(',')},$tail');
-    }
-
-    return '₹${buffer.toString()}';
-  }
+  String get formattedPrice => formatRupees(price);
 
   factory Product.fromMap(Map<String, dynamic> map) {
     final rawStore = map['store'];

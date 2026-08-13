@@ -105,11 +105,25 @@ https-only.
 
 ## API
 
-| Method | Endpoint       | Auth            | Description                        |
-| ------ | -------------- | --------------- | ---------------------------------- |
-| POST   | `/api/signup`  | —               | Create an account                  |
-| POST   | `/api/signin`  | —               | Sign in, returns a JWT (7 days)    |
-| GET    | `/api/user`    | `x-auth-token`  | Current user for a stored token    |
+| Method | Endpoint                        | Auth           | Description                          |
+| ------ | ------------------------------- | -------------- | ------------------------------------ |
+| POST   | `/api/signup`                   | —              | Create an account                    |
+| POST   | `/api/signin`                   | —              | Sign in, returns a JWT (7 days)      |
+| GET    | `/api/user`                     | `x-auth-token` | Current user for a stored token      |
+| GET    | `/api/products`                 | —              | Feed; `page`, `limit`, `category`, `store`, `search` |
+| GET    | `/api/products/categories`      | —              | Categories that have products        |
+| GET    | `/api/products/:id`             | —              | Product detail                       |
+| POST   | `/api/products`                 | vendor         | Create a product in your own store   |
+| GET    | `/api/stores`                   | —              | Active stores                        |
+| GET    | `/api/stores/:id`               | —              | Store profile and its products       |
+| GET    | `/api/cart`                     | `x-auth-token` | Current cart                         |
+| POST   | `/api/cart/items`               | `x-auth-token` | Add, or increment if already present |
+| PATCH  | `/api/cart/items/:productId`    | `x-auth-token` | Set an exact quantity                |
+| DELETE | `/api/cart/items/:productId`    | `x-auth-token` | Remove a line                        |
+| DELETE | `/api/cart`                     | `x-auth-token` | Empty the cart                       |
+
+Every cart mutation returns the full cart, so a client never needs a follow-up
+read. Prices are whole rupees stored as integers.
 
 Protected routes expect the JWT in an `x-auth-token` header. Passwords must be at
 least 8 characters and emails are stored lowercased and uniquely indexed.
@@ -131,8 +145,10 @@ flutter analyze
 - Monorepo structure implemented
 - Backend API with JWT authentication complete
 - Sign up, sign in, session persistence and sign out working end to end
-- Main navigation shell in place (Home, Cart, Orders, Profile — placeholders)
-- Product catalogue, cart and orders not yet implemented
+- Product catalogue with stores, seeded via `npm run seed`
+- Home feed with category filter, and product detail pages
+- Server-side cart: add, change quantity, remove, clear
+- Orders and checkout not yet implemented
 
 ---
 

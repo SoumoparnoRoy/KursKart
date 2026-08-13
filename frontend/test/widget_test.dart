@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:kurskart/models/cart.dart';
 import 'package:kurskart/models/product.dart';
 import 'package:kurskart/models/user.dart';
 import 'package:kurskart/providers/auth_provider.dart';
@@ -208,6 +209,56 @@ void main() {
         Product.fromMap({'_id': 'x', 'name': 'n', 'price': 1, 'stock': 0}).isInStock,
         isFalse,
       );
+    });
+  });
+
+  group('Cart', () {
+    Map<String, dynamic> line(String id, int price, int qty) => {
+      'product': {'_id': id, 'name': 'Item $id', 'price': price, 'stock': 5},
+      'quantity': qty,
+    };
+
+    test('reads totals from the server response', () {
+      final cart = Cart.fromMap({
+        'items': [line('a', 649, 2), line('b', 1299, 1)],
+        'itemCount': 3,
+        'subtotal': 2597,
+      });
+
+      expect(cart.items.length, 2);
+      expect(cart.itemCount, 3);
+      expect(cart.subtotal, 2597);
+      expect(cart.formattedSubtotal, '₹2,597');
+      expect(cart.items.first.lineTotal, 1298);
+    });
+
+    test('falls back to computing totals when they are absent', () {
+      final cart = Cart.fromMap({
+        'items': [line('a', 100, 2), line('b', 50, 3)],
+      });
+
+      expect(cart.itemCount, 5);
+      expect(cart.subtotal, 350);
+    });
+
+    test('skips lines whose product is missing', () {
+      // The server strips these, but a stale or malformed line must not throw.
+      final cart = Cart.fromMap({
+        'items': [
+          line('a', 100, 1),
+          {'product': null, 'quantity': 2},
+          {'quantity': 3},
+        ],
+      });
+
+      expect(cart.items.length, 1);
+      expect(cart.subtotal, 100);
+    });
+
+    test('empty cart reports itself as empty', () {
+      expect(Cart.empty.isEmpty, isTrue);
+      expect(Cart.fromMap({'items': []}).isEmpty, isTrue);
+      expect(Cart.empty.formattedSubtotal, '₹0');
     });
   });
 

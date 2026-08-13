@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kurskart/providers/auth_provider.dart';
+import 'package:kurskart/providers/cart_provider.dart';
+import 'package:kurskart/views/screens/cart_tab.dart';
 import 'package:kurskart/views/screens/home_tab.dart';
 
 /// The shell a signed-in user lands in. The four tabs are placeholders for now
@@ -46,6 +48,19 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     ),
   ];
 
+  Widget _maybeBadge(int index, Widget icon) {
+    if (index != 1) return icon;
+
+    final count = ref.watch(cartProvider).value?.itemCount ?? 0;
+    if (count == 0) return icon;
+
+    return Badge(
+      label: Text('$count'),
+      backgroundColor: _activeColor,
+      child: icon,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).value;
@@ -54,6 +69,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       body: SafeArea(
         child: switch (_currentIndex) {
           0 => const HomeTab(),
+          1 => const CartTab(),
           3 => _ProfileTab(
             fullName: user?.fullName ?? '',
             email: user?.email ?? '',
@@ -70,10 +86,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         selectedLabelStyle: GoogleFonts.nunitoSans(fontWeight: FontWeight.w600),
         unselectedLabelStyle: GoogleFonts.nunitoSans(),
         items: [
-          for (final tab in _tabs)
+          for (final (index, tab) in _tabs.indexed)
             BottomNavigationBarItem(
-              icon: Icon(tab.icon),
-              activeIcon: Icon(tab.activeIcon),
+              // Only the Cart tab carries a count.
+              icon: _maybeBadge(index, Icon(tab.icon)),
+              activeIcon: _maybeBadge(index, Icon(tab.activeIcon)),
               label: tab.label,
             ),
         ],

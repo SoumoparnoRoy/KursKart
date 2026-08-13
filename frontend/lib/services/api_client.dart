@@ -61,6 +61,26 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> patch(
+    String path, {
+    Object? body,
+    String? token,
+  }) {
+    return _send(
+      () => _http.patch(
+        Uri.parse('$uri$path'),
+        headers: _headers(token),
+        body: jsonEncode(body),
+      ),
+    );
+  }
+
+  Future<Map<String, dynamic>> delete(String path, {String? token}) {
+    return _send(
+      () => _http.delete(Uri.parse('$uri$path'), headers: _headers(token)),
+    );
+  }
+
   Future<Map<String, dynamic>> _send(
     Future<http.Response> Function() request,
   ) async {

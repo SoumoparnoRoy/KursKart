@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kurskart/models/product.dart';
+import 'package:kurskart/providers/cart_provider.dart';
 import 'package:kurskart/providers/product_provider.dart';
+import 'package:kurskart/services/api_client.dart';
 import 'package:kurskart/services/manage_http_response.dart';
 
 /// [initialProduct] is the copy the feed already has, so tapping a card renders
@@ -287,13 +289,38 @@ class _StockBadge extends StatelessWidget {
   }
 }
 
-class _AddToCartBar extends StatelessWidget {
+class _AddToCartBar extends ConsumerStatefulWidget {
   const _AddToCartBar({required this.product});
 
   final Product product;
 
   @override
+  ConsumerState<_AddToCartBar> createState() => _AddToCartBarState();
+}
+
+class _AddToCartBarState extends ConsumerState<_AddToCartBar> {
+  bool _isAdding = false;
+
+  Future<void> _add() async {
+    setState(() => _isAdding = true);
+    try {
+      await ref.read(cartProvider.notifier).add(widget.product.id);
+      if (mounted) showSnackBar(context, 'Added to your cart');
+    } on ApiException catch (e) {
+      if (mounted) showSnackBar(context, e.message);
+    } catch (_) {
+      if (mounted) {
+        showSnackBar(context, 'Something went wrong. Please try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _isAdding = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final product = widget.product;
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -306,18 +333,23 @@ class _AddToCartBar extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
-            // The cart does not exist yet, so this is deliberately inert rather
-            // than pretending to work.
-            onPressed: product.isInStock
-                ? () => showSnackBar(context, 'Cart coming soon')
-                : null,
-            child: Text(
-              product.isInStock ? 'Add to Cart' : 'Out of stock',
-              style: GoogleFonts.lato(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            onPressed: product.isInStock && !_isAdding ? _add : null,
+            child: _isAdding
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation(Colors.white),
+                    ),
+                  )
+                : Text(
+                    product.isInStock ? 'Add to Cart' : 'Out of stock',
+                    style: GoogleFonts.lato(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
           ),
         ),
       ),
