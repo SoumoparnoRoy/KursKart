@@ -56,7 +56,10 @@ class ApiClient {
       () => _http.post(
         Uri.parse('$uri$path'),
         headers: _headers(token),
-        body: jsonEncode(body),
+        // Omit the body entirely when there is none. Encoding null sends the
+        // literal "null", which Express's strict JSON parser rejects with an
+        // HTML 400 rather than the JSON error shape we expect.
+        body: body == null ? null : jsonEncode(body),
       ),
     );
   }
@@ -70,7 +73,7 @@ class ApiClient {
       () => _http.patch(
         Uri.parse('$uri$path'),
         headers: _headers(token),
-        body: jsonEncode(body),
+        body: body == null ? null : jsonEncode(body),
       ),
     );
   }

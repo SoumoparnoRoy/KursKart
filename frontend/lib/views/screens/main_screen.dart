@@ -3,20 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kurskart/providers/auth_provider.dart';
 import 'package:kurskart/providers/cart_provider.dart';
+import 'package:kurskart/providers/navigation_provider.dart';
 import 'package:kurskart/views/screens/cart_tab.dart';
 import 'package:kurskart/views/screens/home_tab.dart';
+import 'package:kurskart/views/screens/orders_tab.dart';
 
-/// The shell a signed-in user lands in. The four tabs are placeholders for now
-/// — the navigation structure exists so features can be dropped into it.
-class MainScreen extends ConsumerStatefulWidget {
+/// The shell a signed-in user lands in.
+class MainScreen extends ConsumerWidget {
   const MainScreen({super.key});
-
-  @override
-  ConsumerState<MainScreen> createState() => _MainScreenState();
-}
-
-class _MainScreenState extends ConsumerState<MainScreen> {
-  int _currentIndex = 0;
 
   static const _activeColor = Color.fromARGB(255, 0, 47, 255);
   static const _inactiveColor = Colors.grey;
@@ -48,8 +42,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     ),
   ];
 
-  Widget _maybeBadge(int index, Widget icon) {
-    if (index != 1) return icon;
+  Widget _maybeBadge(WidgetRef ref, int index, Widget icon) {
+    if (index != Tabs.cart) return icon;
 
     final count = ref.watch(cartProvider).value?.itemCount ?? 0;
     if (count == 0) return icon;
@@ -62,24 +56,27 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authProvider).value;
+    final currentIndex = ref.watch(selectedTabProvider);
 
     return Scaffold(
       body: SafeArea(
-        child: switch (_currentIndex) {
+        child: switch (currentIndex) {
           0 => const HomeTab(),
           1 => const CartTab(),
+          2 => const OrdersTab(),
           3 => _ProfileTab(
             fullName: user?.fullName ?? '',
             email: user?.email ?? '',
           ),
-          _ => _PlaceholderTab(label: _tabs[_currentIndex].label),
+          _ => _PlaceholderTab(label: _tabs[currentIndex].label),
         },
       ),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
+        currentIndex: currentIndex,
+        onTap: (index) =>
+            ref.read(selectedTabProvider.notifier).state = index,
         type: BottomNavigationBarType.fixed,
         selectedItemColor: _activeColor,
         unselectedItemColor: _inactiveColor,
@@ -89,8 +86,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           for (final (index, tab) in _tabs.indexed)
             BottomNavigationBarItem(
               // Only the Cart tab carries a count.
-              icon: _maybeBadge(index, Icon(tab.icon)),
-              activeIcon: _maybeBadge(index, Icon(tab.activeIcon)),
+              icon: _maybeBadge(ref, index, Icon(tab.icon)),
+              activeIcon: _maybeBadge(ref, index, Icon(tab.activeIcon)),
               label: tab.label,
             ),
         ],

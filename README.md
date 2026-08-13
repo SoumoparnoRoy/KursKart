@@ -121,9 +121,18 @@ https-only.
 | PATCH  | `/api/cart/items/:productId`    | `x-auth-token` | Set an exact quantity                |
 | DELETE | `/api/cart/items/:productId`    | `x-auth-token` | Remove a line                        |
 | DELETE | `/api/cart`                     | `x-auth-token` | Empty the cart                       |
+| POST   | `/api/orders`                   | `x-auth-token` | Turn the cart into an order          |
+| GET    | `/api/orders`                   | `x-auth-token` | Your orders, newest first            |
+| GET    | `/api/orders/:id`               | `x-auth-token` | A single order you own               |
 
 Every cart mutation returns the full cart, so a client never needs a follow-up
 read. Prices are whole rupees stored as integers.
+
+Placing an order reserves stock with a conditional update per product, so
+simultaneous checkouts cannot oversell; if any line fails, the stock already
+taken is put back and the cart is left untouched. Order lines copy the product
+name, price and image at purchase time, so editing or deleting a product later
+never rewrites past orders.
 
 Protected routes expect the JWT in an `x-auth-token` header. Passwords must be at
 least 8 characters and emails are stored lowercased and uniquely indexed.
@@ -148,7 +157,8 @@ flutter analyze
 - Product catalogue with stores, seeded via `npm run seed`
 - Home feed with category filter, and product detail pages
 - Server-side cart: add, change quantity, remove, clear
-- Orders and checkout not yet implemented
+- Checkout that reserves stock and records an immutable order
+- Payments, delivery addresses and a vendor UI not yet implemented
 
 ---
 

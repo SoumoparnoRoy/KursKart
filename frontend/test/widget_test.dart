@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:kurskart/models/cart.dart';
+import 'package:kurskart/models/order.dart';
 import 'package:kurskart/models/product.dart';
 import 'package:kurskart/models/user.dart';
 import 'package:kurskart/providers/auth_provider.dart';
@@ -259,6 +260,49 @@ void main() {
       expect(Cart.empty.isEmpty, isTrue);
       expect(Cart.fromMap({'items': []}).isEmpty, isTrue);
       expect(Cart.empty.formattedSubtotal, '₹0');
+    });
+  });
+
+  group('Order', () {
+    Map<String, dynamic> orderMap() => {
+      '_id': '6a7df758b97a5f186459c0ca',
+      'items': [
+        {
+          'product': 'p1',
+          'name': 'Stonewashed Linen Shirt',
+          'price': 2499,
+          'image': 'https://example.com/a.jpg',
+          'quantity': 3,
+          'storeName': 'Vellum & Thread',
+        },
+      ],
+      'total': 7497,
+      'status': 'placed',
+      'createdAt': '2026-08-13T16:45:00.000Z',
+    };
+
+    test('reads the snapshot rather than live product data', () {
+      final order = Order.fromMap(orderMap());
+
+      expect(order.items.single.name, 'Stonewashed Linen Shirt');
+      expect(order.items.single.price, 2499);
+      expect(order.items.single.lineTotal, 7497);
+      expect(order.items.single.storeName, 'Vellum & Thread');
+      expect(order.total, 7497);
+      expect(order.formattedTotal, '₹7,497');
+      expect(order.itemCount, 3);
+    });
+
+    test('shortens the id for display', () {
+      expect(Order.fromMap(orderMap()).reference, '#59C0CA');
+      expect(Order.fromMap({'_id': ''}).reference, '');
+    });
+
+    test('defaults status and tolerates a missing date', () {
+      final order = Order.fromMap({'_id': 'x', 'items': [], 'total': 0});
+      expect(order.status, 'placed');
+      expect(order.placedAt, isNull);
+      expect(order.itemCount, 0);
     });
   });
 

@@ -5,6 +5,7 @@ const authRouter = require('./routes/auth');
 const productRouter = require('./routes/product');
 const storeRouter = require('./routes/store');
 const cartRouter = require('./routes/cart');
+const orderRouter = require('./routes/order');
 
 
 const PORT = process.env.PORT || 3000;
@@ -22,6 +23,7 @@ app.use(authRouter);
 app.use(productRouter);
 app.use(storeRouter);
 app.use(cartRouter);
+app.use(orderRouter);
 
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("MongoDB Connected"))

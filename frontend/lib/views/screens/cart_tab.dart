@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kurskart/models/cart.dart';
 import 'package:kurskart/providers/cart_provider.dart';
+import 'package:kurskart/providers/navigation_provider.dart';
+import 'package:kurskart/providers/order_provider.dart';
 import 'package:kurskart/services/api_client.dart';
 import 'package:kurskart/services/manage_http_response.dart';
 
@@ -253,13 +255,50 @@ class _QtyButton extends StatelessWidget {
   }
 }
 
-class _SummaryBar extends StatelessWidget {
+class _SummaryBar extends ConsumerStatefulWidget {
   const _SummaryBar({required this.cart});
 
   final Cart cart;
 
   @override
+  ConsumerState<_SummaryBar> createState() => _SummaryBarState();
+}
+
+class _SummaryBarState extends ConsumerState<_SummaryBar> {
+  bool _isPlacing = false;
+
+  Future<void> _checkout() async {
+    // Captured before the await on purpose. A successful checkout empties the
+    // cart, which swaps this whole subtree for the empty-state widget — so by
+    // the time the request returns, this widget is already unmounted and
+    // neither `context` nor a `mounted` check would survive. Both of these
+    // outlive the widget.
+    final messenger = ScaffoldMessenger.of(context);
+    final tab = ref.read(selectedTabProvider.notifier);
+
+    setState(() => _isPlacing = true);
+    try {
+      final order = await ref.read(ordersProvider.notifier).placeOrder();
+      messenger.showSnackBar(
+        SnackBar(content: Text('Order ${order.reference} placed')),
+      );
+      // The cart is now empty, so send them where the result actually is.
+      tab.state = Tabs.orders;
+    } on ApiException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Something went wrong. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isPlacing = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final cart = widget.cart;
+
     return Material(
       elevation: 8,
       color: Colors.white,
@@ -302,16 +341,23 @@ class _SummaryBar extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                // Orders do not exist yet, so this stays honest rather than
-                // pretending to take a payment.
-                onPressed: () => showSnackBar(context, 'Checkout coming soon'),
-                child: Text(
-                  'Checkout',
-                  style: GoogleFonts.lato(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                onPressed: _isPlacing ? null : _checkout,
+                child: _isPlacing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation(Colors.white),
+                        ),
+                      )
+                    : Text(
+                        'Checkout',
+                        style: GoogleFonts.lato(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
             ],
           ),
