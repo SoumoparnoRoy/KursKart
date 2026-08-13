@@ -41,12 +41,23 @@ const userSchema = mongoose.Schema({
     password: {
         type: String,
         required: true,
+        // Note: this only ever sees the bcrypt hash, which is always 60
+        // characters, so it cannot reject a short password. The real check is
+        // on the raw password in the signup route.
         validate: {
             validator: (value) => {
                 return value.length >= 8;
             },
             message: "Password must be atleast 8 characters",
         }
+    },
+
+    // Accounts created before this field existed have no role at all, so code
+    // must treat a missing role as "customer" rather than assuming it is set.
+    role: {
+        type: String,
+        enum: ["customer", "vendor"],
+        default: "customer",
     },
 });
 
