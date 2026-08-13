@@ -1,2 +1,6 @@
 node_modules/
-.env
+
+# Covers .env, .env.bak, .env.local and anything else prefixed .env — a plain
+# `.env` rule matches only that exact name, so a backup would be committed.
+.env*
+!.env.example
