@@ -30,14 +30,20 @@ class AuthNotifier extends AsyncNotifier<User?> {
 
     try {
       return await _service.fetchUser(token);
-    } on AuthException {
-      // Expired or revoked — drop it so we don't retry with it every launch.
-      await _storage.clear();
-      return null;
+    } on ApiException catch (e) {
+      if (e.statusCode == 401) {
+        // Expired or revoked — drop it so we don't retry with it every launch.
+        await _storage.clear();
+        return null;
+      }
+      // Anything else (server down, no network) says nothing about whether the
+      // token is still good, so keep it and surface the error instead of
+      // silently signing the user out.
+      rethrow;
     }
   }
 
-  /// Throws [AuthException] on failure so the screen can surface the message.
+  /// Throws [ApiException] on failure so the screen can surface the message.
   /// Deliberately does not move state to loading: that would swap the login
   /// screen out mid-request and take its ScaffoldMessenger with it.
   Future<void> signIn({

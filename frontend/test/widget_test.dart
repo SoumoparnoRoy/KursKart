@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:kurskart/models/product.dart';
 import 'package:kurskart/models/user.dart';
 import 'package:kurskart/providers/auth_provider.dart';
+import 'package:kurskart/providers/product_provider.dart';
 import 'package:kurskart/services/auth_service.dart';
+import 'package:kurskart/services/product_service.dart';
 import 'package:kurskart/views/screens/authetication_screens/login_screen.dart';
 import 'package:kurskart/views/screens/authetication_screens/register_screen.dart';
 import 'package:kurskart/views/screens/main_screen.dart';
@@ -31,8 +34,44 @@ class _StubAuth extends AuthNotifier {
   Future<User?> build() async => _initial;
 }
 
+/// The nav shell renders the Home feed, which would otherwise make real HTTP
+/// calls from a widget test.
+class _FakeProductService implements ProductService {
+  const _FakeProductService();
+
+  List<Product> get products => const [];
+
+  @override
+  Future<ProductPage> fetchProducts({
+    int page = 1,
+    int limit = 20,
+    String? category,
+    String? search,
+  }) async => ProductPage(
+    products: products,
+    page: 1,
+    totalPages: 1,
+    total: products.length,
+  );
+
+  @override
+  Future<List<String>> fetchCategories() async => const ['Electronics'];
+
+  @override
+  Future<Product> fetchProduct(String id) async => products.first;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 Widget _wrap(Widget child, {List<Override> overrides = const []}) =>
-    ProviderScope(overrides: overrides, child: MaterialApp(home: child));
+    ProviderScope(
+      overrides: [
+        productServiceProvider.overrideWithValue(const _FakeProductService()),
+        ...overrides,
+      ],
+      child: MaterialApp(home: child),
+    );
 
 void main() {
   group('RegisterScreen', () {
@@ -121,7 +160,7 @@ void main() {
 
   group('AuthService', () {
     test('exposes the server message on failure', () {
-      const e = AuthException('User not found with this email');
+      const e = ApiException('User not found with this email');
       expect(e.message, 'User not found with this email');
       expect(e.toString(), 'User not found with this email');
     });

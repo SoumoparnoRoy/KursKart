@@ -50,7 +50,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         context,
         MaterialPageRoute(builder: (context) => const LoginScreen()),
       );
-    } on AuthException catch (e) {
+    } on ApiException catch (e) {
       if (mounted) showSnackBar(context, e.message);
     } catch (_) {
       if (mounted) {

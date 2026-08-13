@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kurskart/providers/auth_provider.dart';
+import 'package:kurskart/views/screens/home_tab.dart';
 
 /// The shell a signed-in user lands in. The four tabs are placeholders for now
 /// — the navigation structure exists so features can be dropped into it.
@@ -51,9 +52,14 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
     return Scaffold(
       body: SafeArea(
-        child: _currentIndex == 3
-            ? _ProfileTab(fullName: user?.fullName ?? '', email: user?.email ?? '')
-            : _PlaceholderTab(label: _tabs[_currentIndex].label),
+        child: switch (_currentIndex) {
+          0 => const HomeTab(),
+          3 => _ProfileTab(
+            fullName: user?.fullName ?? '',
+            email: user?.email ?? '',
+          ),
+          _ => _PlaceholderTab(label: _tabs[_currentIndex].label),
+        },
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,

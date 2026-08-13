@@ -17,10 +17,42 @@ class AuthGate extends ConsumerWidget {
       loading: () => const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       ),
-      // A failed session restore is not worth an error screen — the user can
-      // simply sign in again.
-      error: (_, _) => const LoginScreen(),
+      // The token survived, so this is a connectivity problem rather than a
+      // rejected session. Offer a retry instead of dropping the user at a login
+      // screen they do not need to use.
+      error: (e, _) => _RestoreFailed(
+        message: '$e',
+        onRetry: () => ref.invalidate(authProvider),
+      ),
       data: (user) => user == null ? const LoginScreen() : const MainScreen(),
+    );
+  }
+}
+
+class _RestoreFailed extends StatelessWidget {
+  const _RestoreFailed({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.cloud_off, size: 48, color: Colors.grey),
+              const SizedBox(height: 12),
+              Text(message, textAlign: TextAlign.center),
+              const SizedBox(height: 20),
+              OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

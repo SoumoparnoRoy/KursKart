@@ -43,7 +43,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           );
       // On success the AuthGate swaps this screen for MainScreen, so there is
       // nothing to navigate to here.
-    } on AuthException catch (e) {
+    } on ApiException catch (e) {
       if (mounted) showSnackBar(context, e.message);
     } catch (_) {
       if (mounted) {
