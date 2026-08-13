@@ -12,6 +12,8 @@ const userSchema = mongoose.Schema({
         type: String,
         required: true,
         trim: true,
+        unique: true,
+        lowercase: true,
         validate: {
             validator: (value) => {
                 const result = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
