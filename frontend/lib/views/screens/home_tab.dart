@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kurskart/models/product.dart';
 import 'package:kurskart/providers/product_provider.dart';
+import 'package:kurskart/views/screens/product_detail_screen.dart';
 
 class HomeTab extends ConsumerWidget {
   const HomeTab({super.key});
@@ -185,7 +186,18 @@ class _ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final image = product.primaryImage;
 
-    return Container(
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProductDetailScreen(
+            productId: product.id,
+            initialProduct: product,
+          ),
+        ),
+      ),
+      child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -270,6 +282,7 @@ class _ProductCard extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }

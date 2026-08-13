@@ -158,6 +158,59 @@ void main() {
     });
   });
 
+  group('Product', () {
+    Product priced(int price) => Product(
+      id: '1',
+      name: 'Thing',
+      description: '',
+      price: price,
+      category: 'Home',
+      images: const [],
+      stock: 1,
+      rating: 0,
+      store: null,
+    );
+
+    test('formats prices with Indian digit grouping', () {
+      expect(priced(0).formattedPrice, '₹0');
+      expect(priced(649).formattedPrice, '₹649');
+      expect(priced(1299).formattedPrice, '₹1,299');
+      expect(priced(74999).formattedPrice, '₹74,999');
+      // Indian grouping pairs digits above the first thousand.
+      expect(priced(123456).formattedPrice, '₹1,23,456');
+      expect(priced(12345678).formattedPrice, '₹1,23,45,678');
+    });
+
+    test('reads a populated store and tolerates a bare id', () {
+      final populated = Product.fromMap({
+        '_id': 'p1',
+        'name': 'Mug',
+        'price': 649,
+        'category': 'Home',
+        'store': {'_id': 's1', 'name': 'Vellum'},
+      });
+      expect(populated.store?.name, 'Vellum');
+
+      final unpopulated = Product.fromMap({
+        '_id': 'p2',
+        'name': 'Mug',
+        'price': 649,
+        'category': 'Home',
+        'store': 's1',
+      });
+      expect(unpopulated.store, isNull);
+      expect(unpopulated.price, 649);
+    });
+
+    test('treats zero stock as out of stock', () {
+      expect(priced(100).isInStock, isTrue);
+      expect(
+        Product.fromMap({'_id': 'x', 'name': 'n', 'price': 1, 'stock': 0}).isInStock,
+        isFalse,
+      );
+    });
+  });
+
   group('AuthService', () {
     test('exposes the server message on failure', () {
       const e = ApiException('User not found with this email');
