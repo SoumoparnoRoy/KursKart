@@ -9,6 +9,10 @@ final productServiceProvider = Provider<ProductService>(
 /// The category currently selected in the feed. Null means "all".
 final selectedCategoryProvider = StateProvider<String?>((ref) => null);
 
+/// The active search term. Debounced by the search field, so this only changes
+/// when the user pauses typing — every change refetches the feed.
+final searchQueryProvider = StateProvider<String>((ref) => '');
+
 final categoriesProvider = FutureProvider<List<String>>(
   (ref) => ref.read(productServiceProvider).fetchCategories(),
 );
@@ -26,10 +30,12 @@ class ProductFeed extends AsyncNotifier<List<Product>> {
 
   @override
   Future<List<Product>> build() async {
-    final category = ref.watch(selectedCategoryProvider);
     final page = await ref
         .read(productServiceProvider)
-        .fetchProducts(category: category);
+        .fetchProducts(
+          category: ref.watch(selectedCategoryProvider),
+          search: ref.watch(searchQueryProvider),
+        );
     _lastPage = page;
     return page.products;
   }
@@ -40,7 +46,10 @@ class ProductFeed extends AsyncNotifier<List<Product>> {
     state = await AsyncValue.guard(() async {
       final page = await ref
           .read(productServiceProvider)
-          .fetchProducts(category: ref.read(selectedCategoryProvider));
+          .fetchProducts(
+            category: ref.read(selectedCategoryProvider),
+            search: ref.read(searchQueryProvider),
+          );
       _lastPage = page;
       return page.products;
     });
@@ -57,6 +66,7 @@ class ProductFeed extends AsyncNotifier<List<Product>> {
         .fetchProducts(
           page: last.page + 1,
           category: ref.read(selectedCategoryProvider),
+          search: ref.read(searchQueryProvider),
         );
 
     _lastPage = next;

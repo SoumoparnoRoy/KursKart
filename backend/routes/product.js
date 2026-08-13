@@ -10,6 +10,12 @@ const productRouter = express.Router();
 const MAX_LIMIT = 50;
 const DEFAULT_LIMIT = 20;
 
+/// User input goes straight into a RegExp, so characters like ( or * must be
+/// neutralised or a stray bracket becomes a 500 (or a very expensive scan).
+function escapeRegExp(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 // Only the fields the feed needs, so a listing does not drag every store field
 // across the wire.
 const STORE_FIELDS = "name logoUrl";
@@ -36,8 +42,14 @@ productRouter.get('/api/products', async (req, res) => {
             filter.store = req.query.store;
         }
 
-        if (req.query.search) {
-            filter.$text = { $search: req.query.search };
+        // Substring match rather than $text, because search runs as the user
+        // types: a text index only matches whole words, so "lin" would find
+        // nothing until "linen" was fully typed. This does not use an index, so
+        // it is worth revisiting (Atlas Search) if the catalogue grows large.
+        const search = (req.query.search ?? "").trim();
+        if (search) {
+            const pattern = new RegExp(escapeRegExp(search), "i");
+            filter.$or = [{ name: pattern }, { description: pattern }];
         }
 
         const [products, total] = await Promise.all([

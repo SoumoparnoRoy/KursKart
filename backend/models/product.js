@@ -51,11 +51,12 @@ const productSchema = mongoose.Schema({
     },
 }, { timestamps: true });
 
-// The feed filters by store and by category, so both are indexed. The text
-// index backs search on the product listing later.
+// The feed filters by store and by category, so both are indexed.
+//
+// There is deliberately no text index: search needs substring matching for
+// type-ahead, which $text cannot do, so the route uses a regex instead.
 productSchema.index({ store: 1 });
 productSchema.index({ category: 1 });
-productSchema.index({ name: "text", description: "text" });
 
 const Product = mongoose.model("Product", productSchema);
 module.exports = Product;

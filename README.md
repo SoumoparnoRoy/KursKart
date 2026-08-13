@@ -128,6 +128,10 @@ https-only.
 Every cart mutation returns the full cart, so a client never needs a follow-up
 read. Prices are whole rupees stored as integers.
 
+`search` is a case-insensitive substring match across product name and
+description, so it works as the user types rather than only on whole words. It
+does not use an index and is worth revisiting once the catalogue is large.
+
 Placing an order reserves stock with a conditional update per product, so
 simultaneous checkouts cannot oversell; if any line fails, the stock already
 taken is put back and the cart is left untouched. Order lines copy the product

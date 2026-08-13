@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -13,6 +15,7 @@ class HomeTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final feed = ref.watch(productFeedProvider);
+    final query = ref.watch(searchQueryProvider);
 
     return RefreshIndicator(
       onRefresh: () => ref.read(productFeedProvider.notifier).refresh(),
@@ -22,6 +25,7 @@ class HomeTab extends ConsumerWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverToBoxAdapter(child: _Header()),
+          const SliverToBoxAdapter(child: _SearchField()),
           const SliverToBoxAdapter(child: _CategoryStrip()),
           feed.when(
             loading: () => const SliverFillRemaining(
@@ -37,11 +41,15 @@ class HomeTab extends ConsumerWidget {
               ),
             ),
             data: (products) => products.isEmpty
-                ? const SliverFillRemaining(
+                ? SliverFillRemaining(
                     hasScrollBody: false,
                     child: _Message(
-                      title: 'Nothing here yet',
-                      detail: 'No products in this category.',
+                      title: query.isEmpty
+                          ? 'Nothing here yet'
+                          : 'No matches for "$query"',
+                      detail: query.isEmpty
+                          ? 'No products in this category.'
+                          : 'Try a different word, or clear the search.',
                     ),
                   )
                 : _ProductGrid(products: products),
@@ -76,6 +84,96 @@ class _Header extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SearchField extends ConsumerStatefulWidget {
+  const _SearchField();
+
+  @override
+  ConsumerState<_SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends ConsumerState<_SearchField> {
+  final TextEditingController _controller = TextEditingController();
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    // Restore the term if the tab is rebuilt, so the field and the feed agree.
+    _controller.text = ref.read(searchQueryProvider);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// Waits for a pause in typing so a five-letter word is one request, not five.
+  void _onChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () {
+      final trimmed = value.trim();
+      if (ref.read(searchQueryProvider) != trimmed) {
+        ref.read(searchQueryProvider.notifier).state = trimmed;
+      }
+    });
+    setState(() {});
+  }
+
+  void _clear() {
+    _debounce?.cancel();
+    _controller.clear();
+    ref.read(searchQueryProvider.notifier).state = '';
+    FocusScope.of(context).unfocus();
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: TextField(
+        controller: _controller,
+        onChanged: _onChanged,
+        textInputAction: TextInputAction.search,
+        onSubmitted: (v) {
+          _debounce?.cancel();
+          ref.read(searchQueryProvider.notifier).state = v.trim();
+        },
+        decoration: InputDecoration(
+          hintText: 'Search products',
+          hintStyle: GoogleFonts.nunitoSans(color: Colors.black38),
+          prefixIcon: const Icon(Icons.search, size: 20),
+          suffixIcon: _controller.text.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: _clear,
+                  tooltip: 'Clear search',
+                ),
+          filled: true,
+          fillColor: Colors.white,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: HomeTab._accent),
+          ),
+        ),
       ),
     );
   }
