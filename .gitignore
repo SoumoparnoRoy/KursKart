@@ -1,0 +1,7 @@
+# Build output that can end up at the repo root when a build runs from here
+# rather than from frontend/.
+build/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
