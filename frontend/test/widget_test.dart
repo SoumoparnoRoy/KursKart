@@ -381,6 +381,16 @@ void main() {
     });
   });
 
+  group('User role', () {
+    test('only an explicit vendor role counts', () {
+      expect(User.fromMap({'_id': '1', 'role': 'vendor'}).isVendor, isTrue);
+      expect(User.fromMap({'_id': '1', 'role': 'customer'}).isVendor, isFalse);
+      // Accounts predating roles have no field at all.
+      expect(User.fromMap({'_id': '1'}).isVendor, isFalse);
+      expect(User.fromMap({'_id': '1', 'role': ''}).isVendor, isFalse);
+    });
+  });
+
   group('AuthService', () {
     test('exposes the server message on failure', () {
       const e = ApiException('User not found with this email');

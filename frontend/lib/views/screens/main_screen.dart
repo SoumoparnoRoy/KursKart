@@ -9,6 +9,8 @@ import 'package:kurskart/providers/navigation_provider.dart';
 import 'package:kurskart/views/screens/cart_tab.dart';
 import 'package:kurskart/views/screens/home_tab.dart';
 import 'package:kurskart/views/screens/orders_tab.dart';
+import 'package:kurskart/views/screens/vendor/store_form_screen.dart';
+import 'package:kurskart/views/screens/vendor/vendor_dashboard_screen.dart';
 
 /// The shell a signed-in user lands in.
 class MainScreen extends ConsumerWidget {
@@ -153,6 +155,8 @@ class _ProfileTab extends ConsumerWidget {
             ),
             const SizedBox(height: 28),
             _AddressCard(user: user),
+            const SizedBox(height: 16),
+            _SellerCard(isVendor: user?.isVendor ?? false),
             const SizedBox(height: 28),
             Center(
               child: OutlinedButton.icon(
@@ -170,6 +174,66 @@ class _ProfileTab extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The way into the vendor side. Lives in Profile rather than as a fifth tab,
+/// so the nav bar is the same for everyone and vendors still shop normally.
+class _SellerCard extends StatelessWidget {
+  const _SellerCard({required this.isVendor});
+
+  final bool isVendor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.storefront_outlined, size: 18),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isVendor ? 'Your Store' : 'Sell on KursKart',
+                  style: GoogleFonts.nunitoSans(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+                Text(
+                  isVendor
+                      ? 'Manage your products and store details.'
+                      : 'Open a store and list your own products.',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 13,
+                    color: Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => isVendor
+                    ? const VendorDashboardScreen()
+                    : const StoreFormScreen(),
+              ),
+            ),
+            child: Text(isVendor ? 'Manage' : 'Start'),
+          ),
+        ],
       ),
     );
   }

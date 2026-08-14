@@ -85,6 +85,19 @@ productRouter.get('/api/products/categories', async (req, res) => {
     }
 });
 
+// The vendor's own catalogue, including anything out of stock that the public
+// feed would bury. Declared before /:id so "mine" is not read as an id.
+productRouter.get('/api/products/mine', verifyToken, verifyVendor, async (req, res) => {
+    try {
+        const products = await Product.find({ store: req.store._id })
+            .sort({ createdAt: -1 })
+            .lean();
+        res.json({ products });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 productRouter.get('/api/products/:id', async (req, res) => {
     try {
         if (!mongoose.isValidObjectId(req.params.id)) {
@@ -135,6 +148,89 @@ productRouter.post('/api/products', verifyToken, verifyVendor, async (req, res) 
             const [first] = Object.values(e.errors);
             return res.status(400).json({ msg: first.message });
         }
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/// Both of these scope the lookup to the vendor's own store, so a vendor can
+/// never edit or delete another store's product even with a valid id.
+productRouter.patch('/api/products/:id', verifyToken, verifyVendor, async (req, res) => {
+    try {
+        if (!mongoose.isValidObjectId(req.params.id)) {
+            return res.status(400).json({ msg: "Invalid product id" });
+        }
+
+        const updates = {};
+        const { name, description, price, category, images, stock } = req.body;
+
+        if (name !== undefined) {
+            if (!name.trim()) {
+                return res.status(400).json({ msg: "Name cannot be empty" });
+            }
+            updates.name = name.trim();
+        }
+        if (description !== undefined) updates.description = description.trim();
+        if (category !== undefined) {
+            if (!category.trim()) {
+                return res.status(400).json({ msg: "Category cannot be empty" });
+            }
+            updates.category = category.trim();
+        }
+        if (price !== undefined) {
+            if (typeof price !== "number" || Number.isNaN(price) || price < 0) {
+                return res.status(400).json({ msg: "Price must be a number of 0 or more" });
+            }
+            updates.price = price;
+        }
+        if (stock !== undefined) {
+            if (!Number.isInteger(stock) || stock < 0) {
+                return res.status(400).json({ msg: "Stock must be a whole number of 0 or more" });
+            }
+            updates.stock = stock;
+        }
+        if (images !== undefined) {
+            updates.images = Array.isArray(images) ? images : [];
+        }
+
+        const product = await Product.findOneAndUpdate(
+            { _id: req.params.id, store: req.store._id },
+            { $set: updates },
+            { returnDocument: "after", runValidators: true },
+        );
+
+        if (!product) {
+            return res.status(404).json({ msg: "Product not found in your store" });
+        }
+
+        res.json(product);
+    } catch (e) {
+        if (e.name === "ValidationError") {
+            const [first] = Object.values(e.errors);
+            return res.status(400).json({ msg: first.message });
+        }
+        res.status(500).json({ error: e.message });
+    }
+});
+
+productRouter.delete('/api/products/:id', verifyToken, verifyVendor, async (req, res) => {
+    try {
+        if (!mongoose.isValidObjectId(req.params.id)) {
+            return res.status(400).json({ msg: "Invalid product id" });
+        }
+
+        const product = await Product.findOneAndDelete({
+            _id: req.params.id,
+            store: req.store._id,
+        });
+
+        if (!product) {
+            return res.status(404).json({ msg: "Product not found in your store" });
+        }
+
+        // Past orders keep their snapshot, and carts holding this product have
+        // the dangling line stripped on their next read.
+        res.json({ msg: "Product deleted", id: product._id });
+    } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });

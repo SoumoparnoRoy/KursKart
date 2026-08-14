@@ -10,6 +10,7 @@ class User {
   final String state;
   final String pincode;
   final String phone;
+  final String role;
   final String password;
 
   User({
@@ -22,8 +23,13 @@ class User {
     this.state = '',
     this.pincode = '',
     this.phone = '',
+    this.role = 'customer',
     this.password = '',
   });
+
+  /// Accounts created before roles existed have no role at all, which reads as
+  /// an empty string — so this must test for vendor rather than not-customer.
+  bool get isVendor => role == 'vendor';
 
   /// Matches the server's rule for a usable address: locality is optional.
   bool get hasAddress =>
@@ -52,6 +58,7 @@ class User {
       'state': state,
       'pincode': pincode,
       'phone': phone,
+      'role': role,
       'password': password,
     };
   }
@@ -69,6 +76,7 @@ class User {
       state: map['state'] as String? ?? "",
       pincode: map['pincode'] as String? ?? "",
       phone: map['phone'] as String? ?? "",
+      role: map['role'] as String? ?? "customer",
       password: map['password'] as String? ?? "",
     );
   }
