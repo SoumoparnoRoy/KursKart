@@ -236,10 +236,15 @@ class _CategoryChip extends StatelessWidget {
         label: Text(label),
         selected: isSelected,
         onSelected: (_) => onTap(),
+        // Weight stays constant across states: making the selected label bolder
+        // widened the text past the width the chip had measured, clipping the
+        // last letter, and made the whole strip jitter on every tap. Only the
+        // colour changes now.
         labelStyle: GoogleFonts.nunitoSans(
-          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          fontWeight: FontWeight.w600,
           color: isSelected ? Colors.white : Colors.black87,
         ),
+        labelPadding: const EdgeInsets.symmetric(horizontal: 6),
         selectedColor: HomeTab._accent,
         backgroundColor: Colors.grey.shade200,
         showCheckmark: false,

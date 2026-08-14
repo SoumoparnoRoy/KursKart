@@ -88,26 +88,58 @@ async function seed() {
             { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
         );
 
-        // Clear only this vendor's previous seed data.
-        const existingStore = await Store.findOne({ owner: user._id });
-        if (existingStore) {
-            await Product.deleteMany({ store: existingStore._id });
-            await Store.deleteOne({ _id: existingStore._id });
-        }
-
-        const store = await Store.create({ owner: user._id, ...vendor.store });
+        const store = await Store.findOneAndUpdate(
+            { owner: user._id },
+            { $set: { owner: user._id, ...vendor.store } },
+            { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
+        );
         storeCount += 1;
 
-        const products = productsByVendor[vendor.key].map(({ photo, ...p }) => ({
-            ...p,
+        // Products are matched on (store, name) and updated in place rather
+        // than deleted and recreated, so their _ids survive a reseed. Anything
+        // holding an id — an open app, a cart, a past order — keeps working.
+        let created = 0;
+        let vendorTotal = 0;
+        const seededNames = [];
+
+        for (const { photo, ...p } of productsByVendor[vendor.key]) {
+            seededNames.push(p.name);
+
+            const result = await Product.findOneAndUpdate(
+                { store: store._id, name: p.name },
+                {
+                    $set: {
+                        ...p,
+                        store: store._id,
+                        images: [
+                            `https://images.unsplash.com/${photo}?${IMAGE_PARAMS}`,
+                        ],
+                    },
+                },
+                {
+                    upsert: true,
+                    returnDocument: "after",
+                    setDefaultsOnInsert: true,
+                    includeResultMetadata: true,
+                },
+            );
+
+            if (result.lastErrorObject?.upserted) created += 1;
+            vendorTotal += 1;
+            productCount += 1;
+        }
+
+        // Drop only products this vendor no longer sells, so renaming or
+        // removing an entry above still cleans up after itself.
+        const removed = await Product.deleteMany({
             store: store._id,
-            images: [`https://images.unsplash.com/${photo}?${IMAGE_PARAMS}`],
-        }));
+            name: { $nin: seededNames },
+        });
 
-        await Product.insertMany(products);
-        productCount += products.length;
-
-        console.log(`  ${store.name}: ${products.length} products`);
+        console.log(
+            `  ${store.name}: ${vendorTotal - created} updated, ` +
+            `${created} created, ${removed.deletedCount} removed`,
+        );
     }
 
     console.log(`\nSeeded ${storeCount} stores and ${productCount} products.`);

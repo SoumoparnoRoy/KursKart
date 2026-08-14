@@ -24,29 +24,43 @@ class ProductDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(productDetailProvider(productId));
-    final product = async.value ?? initialProduct;
+
+    // A 404 means the product is genuinely gone, not that the request failed.
+    // Falling back to the feed's copy would show a listing that cannot be
+    // bought — the user would only find out when Add to Cart failed.
+    final error = async.error;
+    final isGone = error is ApiException && error.statusCode == 404;
+
+    // The feed is now known to be stale, so refresh it. Done after the frame
+    // because invalidating a provider during build is not allowed.
+    if (isGone) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.invalidate(productFeedProvider);
+      });
+    }
+
+    final product = isGone ? null : (async.value ?? initialProduct);
 
     if (product == null) {
       return Scaffold(
         appBar: AppBar(),
         body: Center(
-          child: async.hasError
-              ? Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.cloud_off, size: 44, color: Colors.grey),
-                      const SizedBox(height: 12),
-                      Text('${async.error}', textAlign: TextAlign.center),
-                      const SizedBox(height: 16),
-                      OutlinedButton(
-                        onPressed: () =>
-                            ref.invalidate(productDetailProvider(productId)),
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
+          child: isGone
+              ? _Notice(
+                  icon: Icons.remove_shopping_cart_outlined,
+                  title: 'No longer available',
+                  detail: 'This product has been removed from the store.',
+                  actionLabel: 'Back to products',
+                  onAction: () => Navigator.of(context).pop(),
+                )
+              : async.hasError
+              ? _Notice(
+                  icon: Icons.cloud_off,
+                  title: 'Could not load this product',
+                  detail: '$error',
+                  actionLabel: 'Retry',
+                  onAction: () =>
+                      ref.invalidate(productDetailProvider(productId)),
                 )
               : const CircularProgressIndicator(),
         ),
@@ -158,6 +172,49 @@ class ProductDetailScreen extends ConsumerWidget {
         ),
       ),
       bottomNavigationBar: _AddToCartBar(product: product),
+    );
+  }
+}
+
+class _Notice extends StatelessWidget {
+  const _Notice({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 44, color: Colors.grey),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.lato(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            detail,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.nunitoSans(color: Colors.black54),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton(onPressed: onAction, child: Text(actionLabel)),
+        ],
+      ),
     );
   }
 }
@@ -307,6 +364,11 @@ class _AddToCartBarState extends ConsumerState<_AddToCartBar> {
       await ref.read(cartProvider.notifier).add(widget.product.id);
       if (mounted) showSnackBar(context, 'Added to your cart');
     } on ApiException catch (e) {
+      // The product vanished between the feed loading and this tap, so the
+      // feed is stale too. Refresh it rather than leaving dead cards on screen.
+      if (e.statusCode == 404) {
+        ref.invalidate(productFeedProvider);
+      }
       if (mounted) showSnackBar(context, e.message);
     } catch (_) {
       if (mounted) {

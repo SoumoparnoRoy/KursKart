@@ -38,16 +38,29 @@ class OrdersTab extends ConsumerWidget {
           Expanded(
             child: RefreshIndicator(
               onRefresh: ref.read(ordersProvider.notifier).refresh,
+              // Centred against the space actually available rather than
+              // nudged down by a fixed spacer, which sat too low on a short
+              // screen and too high on a tall one. Still a ListView so
+              // pull-to-refresh works with nothing to scroll.
               child: list.isEmpty
-                  ? ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: const [
-                        SizedBox(height: 120),
-                        _Message(
-                          title: 'No orders yet',
-                          detail: 'Anything you check out will show up here.',
-                        ),
-                      ],
+                  ? LayoutBuilder(
+                      builder: (context, constraints) => ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              minHeight: constraints.maxHeight,
+                            ),
+                            child: const Center(
+                              child: _Message(
+                                title: 'No orders yet',
+                                detail:
+                                    'Anything you check out will show up here.',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     )
                   : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),

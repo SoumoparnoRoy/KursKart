@@ -20,7 +20,10 @@ class GradientButton extends StatelessWidget {
     return GestureDetector(
       onTap: isLoading ? null : onPressed,
       child: Container(
-        width: 319,
+        // Fills whatever the parent allows rather than a fixed 319px, which
+        // left the button narrower than the fields above it and would overflow
+        // a screen narrower than that. The auth forms already cap their width.
+        width: double.infinity,
         height: 50,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(5),

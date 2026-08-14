@@ -26,8 +26,12 @@ class CartTab extends ConsumerWidget {
         detail: '$e',
         onRetry: () => ref.read(cartProvider.notifier).refresh(),
       ),
+      // The empty state is refreshable too. Without this the RefreshIndicator
+      // only existed once items were present, so a cart filled on another
+      // device could never be pulled in.
       data: (data) => data.isEmpty
-          ? const _Message(
+          ? _RefreshableMessage(
+              onRefresh: () => ref.read(cartProvider.notifier).refresh(),
               title: 'Your cart is empty',
               detail: 'Browse the Home tab and add something you like.',
             )
@@ -426,6 +430,38 @@ class _SummaryBarState extends ConsumerState<_SummaryBar> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A centred message that can still be pulled down to refresh, by giving the
+/// scrollable something at least as tall as the viewport.
+class _RefreshableMessage extends StatelessWidget {
+  const _RefreshableMessage({
+    required this.onRefresh,
+    required this.title,
+    required this.detail,
+  });
+
+  final Future<void> Function() onRefresh;
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: LayoutBuilder(
+        builder: (context, constraints) => ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Center(child: _Message(title: title, detail: detail)),
+            ),
+          ],
         ),
       ),
     );
