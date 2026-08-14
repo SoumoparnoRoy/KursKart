@@ -117,6 +117,12 @@ https-only.
 | POST   | `/api/products`                 | vendor         | Create a product in your own store   |
 | GET    | `/api/stores`                   | —              | Active stores                        |
 | GET    | `/api/stores/:id`               | —              | Store profile and its products       |
+| GET    | `/api/stores/mine`              | `x-auth-token` | Your own store                       |
+| POST   | `/api/stores`                   | `x-auth-token` | Open a store; promotes you to vendor |
+| PATCH  | `/api/stores/mine`              | `x-auth-token` | Edit your store                      |
+| GET    | `/api/products/mine`            | vendor         | Your catalogue, incl. out of stock   |
+| PATCH  | `/api/products/:id`             | vendor         | Edit a product in your own store     |
+| DELETE | `/api/products/:id`             | vendor         | Delete a product from your own store |
 | GET    | `/api/cart`                     | `x-auth-token` | Current cart                         |
 | POST   | `/api/cart/items`               | `x-auth-token` | Add, or increment if already present |
 | PATCH  | `/api/cart/items/:productId`    | `x-auth-token` | Set an exact quantity                |
@@ -142,6 +148,11 @@ never rewrites past orders. The delivery address is copied the same way.
 Each user has one delivery address. Checkout refuses without it, returning
 `code: "ADDRESS_REQUIRED"` so the client can send the user to the form rather
 than showing a raw error. Pincode and phone follow Indian formats.
+
+Owning a store is what makes an account a vendor — `POST /api/stores` sets the
+role as a side effect, and there is one store per user. Vendor routes scope
+every lookup to the caller's own store, so a valid product id belonging to
+another store simply does not match.
 
 Protected routes expect the JWT in an `x-auth-token` header. Passwords must be at
 least 8 characters and emails are stored lowercased and uniquely indexed.
@@ -204,7 +215,10 @@ flutter analyze
 - Server-side cart: add, change quantity, remove, clear
 - Checkout that reserves stock and records an immutable order
 - Delivery address, editable in Profile and required at checkout
-- Payments, delivery addresses and a vendor UI not yet implemented
+- Product search across name and description
+- Vendor side: open a store from Profile, then add, edit and delete products
+- Not yet implemented: payments, image uploads (product images are URLs), and
+  order status transitions — orders stay at `placed`
 
 ---
 
