@@ -57,6 +57,24 @@ const productsByVendor = {
     ],
 };
 
+/// Products are matched on (store, name), so two entries sharing a name inside
+/// one vendor would silently overwrite each other and one product would just be
+/// missing. Caught here, before anything is written.
+function assertNamesAreUnique() {
+    for (const [key, products] of Object.entries(productsByVendor)) {
+        const seen = new Set();
+        for (const { name } of products) {
+            if (seen.has(name)) {
+                throw new Error(
+                    `Duplicate product name "${name}" for vendor "${key}". ` +
+                    `Names must be unique within a store.`,
+                );
+            }
+            seen.add(name);
+        }
+    }
+}
+
 async function seed() {
     for (const key of ["MONGO_URI"]) {
         if (!process.env[key]) {
@@ -64,6 +82,8 @@ async function seed() {
             process.exit(1);
         }
     }
+
+    assertNamesAreUnique();
 
     await mongoose.connect(process.env.MONGO_URI);
     console.log("MongoDB Connected");
@@ -111,6 +131,7 @@ async function seed() {
                     $set: {
                         ...p,
                         store: store._id,
+                        seeded: true,
                         images: [
                             `https://images.unsplash.com/${photo}?${IMAGE_PARAMS}`,
                         ],
@@ -129,10 +150,11 @@ async function seed() {
             productCount += 1;
         }
 
-        // Drop only products this vendor no longer sells, so renaming or
-        // removing an entry above still cleans up after itself.
+        // Scoped to seeded:true so this only ever removes rows the seeder owns.
+        // Products a vendor created in the same store are left alone.
         const removed = await Product.deleteMany({
             store: store._id,
+            seeded: true,
             name: { $nin: seededNames },
         });
 

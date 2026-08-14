@@ -49,6 +49,14 @@ const productSchema = mongoose.Schema({
         min: 0,
         max: 5,
     },
+
+    // True only for rows created by the seed script. The seeder uses this to
+    // scope its cleanup to its own data, so running it never deletes products a
+    // vendor created in the same store.
+    seeded: {
+        type: Boolean,
+        default: false,
+    },
 }, { timestamps: true });
 
 // The feed filters by store and by category, so both are indexed.
