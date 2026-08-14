@@ -48,6 +48,17 @@ const orderSchema = mongoose.Schema({
         },
     },
 
+    // Copied from the user at purchase time, like the item prices above. If
+    // they move house, past orders must still show where they were sent.
+    shippingAddress: {
+        addressLine: { type: String, default: "" },
+        locality: { type: String, default: "" },
+        city: { type: String, default: "" },
+        state: { type: String, default: "" },
+        pincode: { type: String, default: "" },
+        phone: { type: String, default: "" },
+    },
+
     subtotal: { type: Number, required: true, min: 0 },
     total: { type: Number, required: true, min: 0 },
 

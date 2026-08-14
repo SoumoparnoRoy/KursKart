@@ -182,6 +182,34 @@ class _OrderCard extends StatelessWidget {
                 ],
               ),
             ),
+          // Absent on orders placed before addresses existed.
+          if (order.shippingAddress.isNotEmpty) ...[
+            const Divider(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.location_on_outlined,
+                    size: 15,
+                    color: Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      order.shippingAddress,
+                      style: GoogleFonts.nunitoSans(
+                        fontSize: 12,
+                        color: Colors.black54,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

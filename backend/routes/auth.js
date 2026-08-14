@@ -3,6 +3,7 @@ const User = require('../models/user');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const verifyToken = require('../middlewares/auth');
+const { validateAddress } = require('../address');
 
 
 const authRouter = express.Router();
@@ -90,6 +91,43 @@ authRouter.get('/api/user', verifyToken, async (req, res) => {
 
         const { password, ...userWithoutPassword } = user._doc;
         res.json({ token: req.token, ...userWithoutPassword });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Saves the caller's delivery address. Returns the updated user in the same
+// shape as GET /api/user, so the client can replace its copy directly.
+authRouter.patch('/api/user/address', verifyToken, async (req, res) => {
+    try {
+        const error = validateAddress(req.body);
+        if (error) {
+            return res.status(400).json({ msg: error });
+        }
+
+        const { addressLine, locality, city, state, pincode, phone } = req.body;
+
+        const user = await User.findByIdAndUpdate(
+            req.user,
+            {
+                $set: {
+                    addressLine: addressLine.trim(),
+                    locality: (locality ?? "").trim(),
+                    city: city.trim(),
+                    state: state.trim(),
+                    pincode: pincode.toString().trim(),
+                    phone: phone.toString().trim().replace(/[\s-]/g, ""),
+                },
+            },
+            { returnDocument: "after", runValidators: true },
+        );
+
+        if (!user) {
+            return res.status(404).json({ msg: "User not found" });
+        }
+
+        const { password, ...userWithoutPassword } = user._doc;
+        res.json(userWithoutPassword);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

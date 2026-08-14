@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kurskart/models/cart.dart';
+import 'package:kurskart/providers/auth_provider.dart';
 import 'package:kurskart/providers/cart_provider.dart';
 import 'package:kurskart/providers/navigation_provider.dart';
 import 'package:kurskart/providers/order_provider.dart';
+import 'package:kurskart/views/screens/address_screen.dart';
 import 'package:kurskart/services/api_client.dart';
 import 'package:kurskart/services/manage_http_response.dart';
 
@@ -79,6 +81,7 @@ class _CartList extends ConsumerWidget {
             ],
           ),
         ),
+        const _DeliverToStrip(),
         Expanded(
           child: RefreshIndicator(
             onRefresh: notifier.refresh,
@@ -116,6 +119,51 @@ class _CartList extends ConsumerWidget {
         ),
         _SummaryBar(cart: cart),
       ],
+    );
+  }
+}
+
+/// One-line summary of where the order will go, with a way to change it.
+class _DeliverToStrip extends ConsumerWidget {
+  const _DeliverToStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authProvider).value;
+    final hasAddress = user?.hasAddress ?? false;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 8, 4),
+      child: Row(
+        children: [
+          Icon(
+            Icons.location_on_outlined,
+            size: 16,
+            color: hasAddress ? Colors.black54 : Colors.orange.shade800,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              hasAddress
+                  ? 'Deliver to ${user!.city}, ${user.pincode}'
+                  : 'No delivery address yet',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.nunitoSans(
+                fontSize: 13,
+                color: hasAddress ? Colors.black54 : Colors.orange.shade900,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AddressScreen()),
+            ),
+            child: Text(hasAddress ? 'Change' : 'Add'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -275,7 +323,24 @@ class _SummaryBarState extends ConsumerState<_SummaryBar> {
     // outlive the widget.
     final messenger = ScaffoldMessenger.of(context);
     final tab = ref.read(selectedTabProvider.notifier);
+    final navigator = Navigator.of(context);
 
+    // The server refuses an order without an address, but sending the user
+    // straight to the form is friendlier than showing them that error.
+    final user = ref.read(authProvider).value;
+    if (user != null && !user.hasAddress) {
+      final saved = await navigator.push<bool>(
+        MaterialPageRoute(
+          builder: (_) => const AddressScreen(
+            reason: 'Add a delivery address to place your order.',
+          ),
+        ),
+      );
+      // They backed out without saving — leave the cart untouched.
+      if (saved != true) return;
+    }
+
+    if (!mounted) return;
     setState(() => _isPlacing = true);
     try {
       final order = await ref.read(ordersProvider.notifier).placeOrder();

@@ -69,6 +69,37 @@ class AuthNotifier extends AsyncNotifier<User?> {
     );
   }
 
+  /// Saves the delivery address and replaces the cached user, so anything
+  /// watching [authProvider] (Profile, checkout) sees it immediately.
+  /// [addressState] rather than `state`: a parameter named `state` would shadow
+  /// the notifier's own `state`, and the assignment below would silently target
+  /// the wrong thing.
+  Future<void> saveAddress({
+    required String addressLine,
+    required String locality,
+    required String city,
+    required String addressState,
+    required String pincode,
+    required String phone,
+  }) async {
+    final token = await _storage.read();
+    if (token == null) {
+      throw StateError('Cannot save an address while signed out');
+    }
+
+    final user = await _service.saveAddress(
+      token: token,
+      addressLine: addressLine,
+      locality: locality,
+      city: city,
+      state: addressState,
+      pincode: pincode,
+      phone: phone,
+    );
+
+    state = AsyncValue.data(user);
+  }
+
   Future<void> signOut() async {
     await _storage.clear();
     state = const AsyncValue.data(null);

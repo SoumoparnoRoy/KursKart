@@ -3,7 +3,9 @@ const mongoose = require('mongoose');
 const Cart = require('../models/cart');
 const Order = require('../models/order');
 const Product = require('../models/product');
+const User = require('../models/user');
 const verifyToken = require('../middlewares/auth');
+const { hasAddress, addressOf } = require('../address');
 
 
 const orderRouter = express.Router();
@@ -39,6 +41,19 @@ async function reserveStock(lines) {
 
 orderRouter.post('/api/orders', verifyToken, async (req, res) => {
     try {
+        // Checked before touching stock: refusing early avoids reserving units
+        // for an order that cannot be shipped anywhere.
+        const user = await User.findById(req.user);
+        if (!user) {
+            return res.status(404).json({ msg: "User not found" });
+        }
+        if (!hasAddress(user)) {
+            return res.status(400).json({
+                msg: "Add a delivery address before placing an order",
+                code: "ADDRESS_REQUIRED",
+            });
+        }
+
         const cart = await Cart.findOne({ user: req.user }).populate({
             path: "items.product",
             populate: { path: "store", select: "name" },
@@ -74,6 +89,7 @@ orderRouter.post('/api/orders', verifyToken, async (req, res) => {
         const order = await Order.create({
             user: req.user,
             items,
+            shippingAddress: addressOf(user),
             subtotal,
             // No delivery charge or tax yet, so total tracks subtotal. Kept as
             // its own field so adding them later does not change the schema.

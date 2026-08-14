@@ -48,4 +48,28 @@ class AuthService {
     final body = await _client.get('/api/user', token: token);
     return User.fromMap(body);
   }
+
+  Future<User> saveAddress({
+    required String token,
+    required String addressLine,
+    required String locality,
+    required String city,
+    required String state,
+    required String pincode,
+    required String phone,
+  }) async {
+    final body = await _client.patch(
+      '/api/user/address',
+      token: token,
+      body: {
+        'addressLine': addressLine,
+        'locality': locality,
+        'city': city,
+        'state': state,
+        'pincode': pincode,
+        'phone': phone,
+      },
+    );
+    return User.fromMap(body);
+  }
 }

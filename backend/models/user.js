@@ -23,19 +23,42 @@ const userSchema = mongoose.Schema({
         }
     },
 
-    state: {
+    // Delivery address. One per user; orders copy it at purchase time so a
+    // later move does not rewrite where past orders were sent.
+    addressLine: {
         type: String,
         default: "",
-    },
-
-    city: {
-        type: String,
-        default: "",
+        trim: true,
     },
 
     locality: {
         type: String,
         default: "",
+        trim: true,
+    },
+
+    city: {
+        type: String,
+        default: "",
+        trim: true,
+    },
+
+    state: {
+        type: String,
+        default: "",
+        trim: true,
+    },
+
+    pincode: {
+        type: String,
+        default: "",
+        trim: true,
+    },
+
+    phone: {
+        type: String,
+        default: "",
+        trim: true,
     },
 
     password: {

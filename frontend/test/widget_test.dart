@@ -306,6 +306,81 @@ void main() {
     });
   });
 
+  group('User address', () {
+    User withAddress({
+      String addressLine = '12 Park Street',
+      String locality = 'Park Circus',
+      String city = 'Kolkata',
+      String state = 'West Bengal',
+      String pincode = '700016',
+      String phone = '9876543210',
+    }) => User(
+      id: '1',
+      fullName: 'Ada',
+      email: 'ada@example.com',
+      addressLine: addressLine,
+      locality: locality,
+      city: city,
+      state: state,
+      pincode: pincode,
+      phone: phone,
+    );
+
+    test('is complete only when every required field is present', () {
+      expect(withAddress().hasAddress, isTrue);
+      // Locality is the one optional field.
+      expect(withAddress(locality: '').hasAddress, isTrue);
+      expect(withAddress(addressLine: '').hasAddress, isFalse);
+      expect(withAddress(city: '').hasAddress, isFalse);
+      expect(withAddress(state: '').hasAddress, isFalse);
+      expect(withAddress(pincode: '').hasAddress, isFalse);
+      expect(withAddress(phone: '').hasAddress, isFalse);
+    });
+
+    test('a brand new user has no address', () {
+      final user = User.fromMap({'_id': 'x', 'fullName': 'New', 'email': 'n@x.com'});
+      expect(user.hasAddress, isFalse);
+      expect(user.addressLine, '');
+    });
+
+    test('formats for display and skips the optional line', () {
+      expect(
+        withAddress().formattedAddress,
+        '12 Park Street\nPark Circus\nKolkata, West Bengal 700016\nPhone: 9876543210',
+      );
+      expect(
+        withAddress(locality: '').formattedAddress,
+        '12 Park Street\nKolkata, West Bengal 700016\nPhone: 9876543210',
+      );
+    });
+  });
+
+  group('Order shipping address', () {
+    test('flattens the snapshot into one line', () {
+      final order = Order.fromMap({
+        '_id': 'o1',
+        'items': [],
+        'total': 0,
+        'shippingAddress': {
+          'addressLine': '12 Park Street',
+          'locality': 'Park Circus',
+          'city': 'Kolkata',
+          'state': 'West Bengal',
+          'pincode': '700016',
+          'phone': '9876543210',
+        },
+      });
+      expect(
+        order.shippingAddress,
+        '12 Park Street, Park Circus, Kolkata, West Bengal 700016',
+      );
+    });
+
+    test('is empty for orders placed before addresses existed', () {
+      expect(Order.fromMap({'_id': 'o2'}).shippingAddress, '');
+    });
+  });
+
   group('AuthService', () {
     test('exposes the server message on failure', () {
       const e = ApiException('User not found with this email');

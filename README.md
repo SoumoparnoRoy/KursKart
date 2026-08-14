@@ -110,6 +110,7 @@ https-only.
 | POST   | `/api/signup`                   | —              | Create an account                    |
 | POST   | `/api/signin`                   | —              | Sign in, returns a JWT (7 days)      |
 | GET    | `/api/user`                     | `x-auth-token` | Current user for a stored token      |
+| PATCH  | `/api/user/address`             | `x-auth-token` | Save the delivery address            |
 | GET    | `/api/products`                 | —              | Feed; `page`, `limit`, `category`, `store`, `search` |
 | GET    | `/api/products/categories`      | —              | Categories that have products        |
 | GET    | `/api/products/:id`             | —              | Product detail                       |
@@ -136,7 +137,11 @@ Placing an order reserves stock with a conditional update per product, so
 simultaneous checkouts cannot oversell; if any line fails, the stock already
 taken is put back and the cart is left untouched. Order lines copy the product
 name, price and image at purchase time, so editing or deleting a product later
-never rewrites past orders.
+never rewrites past orders. The delivery address is copied the same way.
+
+Each user has one delivery address. Checkout refuses without it, returning
+`code: "ADDRESS_REQUIRED"` so the client can send the user to the form rather
+than showing a raw error. Pincode and phone follow Indian formats.
 
 Protected routes expect the JWT in an `x-auth-token` header. Passwords must be at
 least 8 characters and emails are stored lowercased and uniquely indexed.
@@ -198,6 +203,7 @@ flutter analyze
 - Home feed with category filter, and product detail pages
 - Server-side cart: add, change quantity, remove, clear
 - Checkout that reserves stock and records an immutable order
+- Delivery address, editable in Profile and required at checkout
 - Payments, delivery addresses and a vendor UI not yet implemented
 
 ---

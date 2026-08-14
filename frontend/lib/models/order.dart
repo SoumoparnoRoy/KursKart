@@ -43,6 +43,7 @@ class Order {
     required this.total,
     required this.status,
     required this.placedAt,
+    required this.shippingAddress,
   });
 
   final String id;
@@ -50,6 +51,10 @@ class Order {
   final int total;
   final String status;
   final DateTime? placedAt;
+
+  /// Where this order was sent, as it read at purchase time. Orders placed
+  /// before addresses existed have none.
+  final String shippingAddress;
 
   int get itemCount => items.fold(0, (sum, i) => sum + i.quantity);
 
@@ -70,6 +75,23 @@ class Order {
       total: (map['total'] as num?)?.toInt() ?? 0,
       status: map['status'] as String? ?? 'placed',
       placedAt: DateTime.tryParse(map['createdAt'] as String? ?? ''),
+      shippingAddress: _formatAddress(map['shippingAddress']),
     );
+  }
+
+  static String _formatAddress(Object? raw) {
+    if (raw is! Map<String, dynamic>) return '';
+    String at(String k) => (raw[k] as String? ?? '').trim();
+
+    final cityLine = [
+      at('city'),
+      at('state'),
+    ].where((s) => s.isNotEmpty).join(', ');
+
+    return [
+      at('addressLine'),
+      at('locality'),
+      [cityLine, at('pincode')].where((s) => s.isNotEmpty).join(' '),
+    ].where((s) => s.isNotEmpty).join(', ');
   }
 }

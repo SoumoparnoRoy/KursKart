@@ -4,29 +4,54 @@ class User {
   final String id;
   final String fullName;
   final String email;
-  final String state;
-  final String city;
+  final String addressLine;
   final String locality;
+  final String city;
+  final String state;
+  final String pincode;
+  final String phone;
   final String password;
 
   User({
     required this.id,
     required this.fullName,
     required this.email,
-    required this.state,
-    required this.city,
-    required this.locality,
-    required this.password,
+    this.addressLine = '',
+    this.locality = '',
+    this.city = '',
+    this.state = '',
+    this.pincode = '',
+    this.phone = '',
+    this.password = '',
   });
+
+  /// Matches the server's rule for a usable address: locality is optional.
+  bool get hasAddress =>
+      addressLine.isNotEmpty &&
+      city.isNotEmpty &&
+      state.isNotEmpty &&
+      pincode.isNotEmpty &&
+      phone.isNotEmpty;
+
+  /// Multi-line form for display, skipping any empty parts.
+  String get formattedAddress => [
+    addressLine,
+    locality,
+    '$city, $state $pincode'.trim(),
+    if (phone.isNotEmpty) 'Phone: $phone',
+  ].where((line) => line.trim().isNotEmpty && line.trim() != ',').join('\n');
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'id': id,
       'fullName': fullName,
       'email': email,
-      'state': state,
-      'city': city,
+      'addressLine': addressLine,
       'locality': locality,
+      'city': city,
+      'state': state,
+      'pincode': pincode,
+      'phone': phone,
       'password': password,
     };
   }
@@ -38,9 +63,12 @@ class User {
       id: map['_id'] as String? ?? "",
       fullName: map['fullName'] as String? ?? "",
       email: map['email'] as String? ?? "",
-      state: map['state'] as String? ?? "",
-      city: map['city'] as String? ?? "",
+      addressLine: map['addressLine'] as String? ?? "",
       locality: map['locality'] as String? ?? "",
+      city: map['city'] as String? ?? "",
+      state: map['state'] as String? ?? "",
+      pincode: map['pincode'] as String? ?? "",
+      phone: map['phone'] as String? ?? "",
       password: map['password'] as String? ?? "",
     );
   }
