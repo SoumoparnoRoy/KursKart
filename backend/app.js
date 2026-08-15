@@ -6,6 +6,7 @@ const productRouter = require('./routes/product');
 const storeRouter = require('./routes/store');
 const cartRouter = require('./routes/cart');
 const orderRouter = require('./routes/order');
+const reviewRouter = require('./routes/review');
 
 
 // Checked here rather than in index.js because serverless never runs index.js.
@@ -45,5 +46,6 @@ app.use(productRouter);
 app.use(storeRouter);
 app.use(cartRouter);
 app.use(orderRouter);
+app.use(reviewRouter);
 
 module.exports = app;

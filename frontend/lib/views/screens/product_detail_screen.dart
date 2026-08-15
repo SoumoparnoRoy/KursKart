@@ -6,6 +6,8 @@ import 'package:kurskart/providers/cart_provider.dart';
 import 'package:kurskart/providers/product_provider.dart';
 import 'package:kurskart/services/api_client.dart';
 import 'package:kurskart/services/manage_http_response.dart';
+import 'package:kurskart/views/widgets/reviews_section.dart';
+import 'package:kurskart/views/widgets/star_rating.dart';
 
 /// [initialProduct] is the copy the feed already has, so tapping a card renders
 /// immediately instead of showing a spinner while the detail request runs.
@@ -110,16 +112,15 @@ class ProductDetailScreen extends ConsumerWidget {
                             ),
                           ),
                           const Spacer(),
-                          if (product.rating > 0) ...[
-                            const Icon(
-                              Icons.star,
-                              size: 18,
-                              color: Colors.amber,
-                            ),
-                            const SizedBox(width: 4),
+                          // A rating of 0 means nobody has reviewed it, not
+                          // that it scored zero, so the count is what decides.
+                          if (product.hasRating) ...[
+                            StarRating(rating: product.rating, size: 16),
+                            const SizedBox(width: 6),
                             Text(
-                              product.rating.toStringAsFixed(1),
-                              style: GoogleFonts.nunitoSans(fontSize: 15),
+                              '${product.rating.toStringAsFixed(1)} '
+                              '(${product.ratingCount})',
+                              style: GoogleFonts.nunitoSans(fontSize: 14),
                             ),
                           ],
                         ],
@@ -163,6 +164,8 @@ class ProductDetailScreen extends ConsumerWidget {
                           ),
                         ],
                       ),
+                      const Divider(height: 32),
+                      ReviewsSection(product: product),
                     ],
                   ),
                 ),

@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kurskart/models/order.dart';
 import 'package:kurskart/providers/order_provider.dart';
+import 'package:kurskart/providers/review_provider.dart';
 import 'package:kurskart/services/api_client.dart';
+import 'package:kurskart/views/screens/review_form_screen.dart';
 import 'package:kurskart/views/widgets/order_status_chip.dart';
 
 class OrdersTab extends ConsumerWidget {
@@ -252,6 +254,13 @@ class _OrderCardState extends ConsumerState<_OrderCard> {
                             ],
                           ],
                         ),
+                        // Reviewing is only possible once a line is delivered,
+                        // which is exactly what this row knows.
+                        if (item.status == 'delivered')
+                          _RateLine(
+                            productId: item.productId,
+                            productName: item.name,
+                          ),
                       ],
                     ),
                   ),
@@ -313,6 +322,60 @@ class _OrderCardState extends ConsumerState<_OrderCard> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// The review shortcut under a delivered line. It asks the server whether this
+/// user has already reviewed the product, so the button says "Rate" or "Edit"
+/// correctly rather than sending them into a form that would be rejected.
+class _RateLine extends ConsumerWidget {
+  const _RateLine({required this.productId, required this.productName});
+
+  final String productId;
+  final String productName;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final eligibility = ref.watch(reviewEligibilityProvider(productId)).value;
+
+    // Still loading, or the product has since been deleted — either way there
+    // is nothing useful to offer yet.
+    if (eligibility == null || !eligibility.canReview) {
+      return const SizedBox.shrink();
+    }
+
+    final existing = eligibility.mine;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.compact,
+        ),
+        icon: Icon(
+          existing == null ? Icons.star_border : Icons.star,
+          size: 16,
+          color: Colors.amber.shade700,
+        ),
+        label: Text(
+          existing == null ? 'Rate this' : 'Edit your review',
+          style: GoogleFonts.nunitoSans(fontSize: 12),
+        ),
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ReviewFormScreen(
+              productId: productId,
+              productName: productName,
+              existing: existing,
+            ),
+          ),
+        ),
       ),
     );
   }

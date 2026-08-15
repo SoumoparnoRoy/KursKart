@@ -43,11 +43,20 @@ const productSchema = mongoose.Schema({
         required: true,
     },
 
+    // Both are denormalised from the reviews and written only by
+    // Review.refreshProductRating. Kept on the product so the feed can show and
+    // sort by stars without joining every review on each read.
     rating: {
         type: Number,
         default: 0,
         min: 0,
         max: 5,
+    },
+
+    ratingCount: {
+        type: Number,
+        default: 0,
+        min: 0,
     },
 
     // True only for rows created by the seed script. The seeder uses this to

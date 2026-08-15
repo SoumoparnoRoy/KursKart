@@ -76,6 +76,24 @@ npm start
 
 Use `npm run dev` for auto-restart on file changes.
 
+### Demo data
+
+```bash
+npm run seed
+```
+
+Re-runnable. It upserts two vendors with their stores and products, five demo
+shoppers, a delivered order for each shopper and store, and the reviews those
+orders entitle — so every star in the catalogue is backed by a real row rather
+than a hardcoded number. The script prints the logins and passwords when it
+finishes.
+
+Products are matched on (store, name) and updated in place, so their ids survive
+a reseed and open carts keep working. Reviews are matched on (product, user) for
+the same reason, and because a review written by hand while signed in as a demo
+shopper would otherwise collide with the seeded one. Seeding resets stock to the
+seed values, and rebuilds the demo shoppers' order history from scratch.
+
 ### Frontend
 
 ```bash
@@ -134,6 +152,11 @@ https-only.
 | PATCH  | `/api/orders/:id/cancel`        | `x-auth-token` | Cancel your own order while unshipped |
 | GET    | `/api/orders/vendor`            | vendor         | Orders containing your products      |
 | PATCH  | `/api/orders/:id/status`        | vendor         | Move your own lines along            |
+| GET    | `/api/products/:id/reviews`     | —              | Reviews and the star distribution    |
+| GET    | `/api/products/:id/reviews/mine`| `x-auth-token` | May you review it, and did you       |
+| POST   | `/api/products/:id/reviews`     | `x-auth-token` | Review something delivered to you    |
+| PATCH  | `/api/reviews/:id`              | `x-auth-token` | Edit your own review                 |
+| DELETE | `/api/reviews/:id`              | `x-auth-token` | Delete your own review               |
 
 Every cart mutation returns the full cart, so a client never needs a follow-up
 read. Prices are whole rupees stored as integers.
@@ -162,6 +185,18 @@ terminal. `GET /api/orders/vendor` trims every order to the caller's own lines
 and recomputes the total from them, so a vendor never sees what another store
 sold to the same customer. Cancelling — by either side — puts the reserved stock
 back. A buyer cancels the whole order and only while nothing has shipped.
+
+A product's `rating` and `ratingCount` are **derived from its reviews**, never
+set by hand. Writing, editing or deleting a review recomputes both on the
+product, so the feed can sort and display stars without joining reviews on every
+read. A rating of 0 means unrated rather than terrible — check `ratingCount`
+before showing stars.
+
+Reviewing requires a **delivered** line for that product in one of your own
+orders, which is why order status had to come first. Buying is not enough: a
+cancelled order proves nothing. There is one review per person per product,
+enforced by a unique index, so editing goes through `PATCH` rather than a second
+row and the average cannot be stuffed by reviewing repeatedly.
 
 Owning a store is what makes an account a vendor — `POST /api/stores` sets the
 role as a side effect, and there is one store per user. Vendor routes scope
@@ -233,6 +268,7 @@ flutter analyze
 - Vendor side: open a store from Profile, then add, edit and delete products
 - Vendor Orders tab: incoming orders, with per-store status transitions
 - Buyers can cancel an order until it ships; cancelling restores stock
+- Verified-purchase reviews, with product ratings derived from them
 - Not yet implemented: payments, image uploads (product images are URLs), and
   notifications — neither side is told when a status changes
 

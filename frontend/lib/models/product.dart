@@ -11,6 +11,7 @@ class Product {
     required this.images,
     required this.stock,
     required this.rating,
+    required this.ratingCount,
     required this.store,
   });
 
@@ -24,7 +25,14 @@ class Product {
   final String category;
   final List<String> images;
   final int stock;
+
+  /// Both are derived by the server from the product's reviews. A product with
+  /// no reviews has a rating of 0, which means "unrated" rather than "terrible"
+  /// — check [ratingCount] before showing stars.
   final double rating;
+  final int ratingCount;
+
+  bool get hasRating => ratingCount > 0;
 
   /// Null when the API returned an unpopulated store reference.
   final Store? store;
@@ -49,6 +57,7 @@ class Product {
           const [],
       stock: (map['stock'] as num?)?.toInt() ?? 0,
       rating: (map['rating'] as num?)?.toDouble() ?? 0,
+      ratingCount: (map['ratingCount'] as num?)?.toInt() ?? 0,
       // The API populates `store` on feed and detail reads, but a bare id is
       // still valid JSON for this field.
       store: rawStore is Map<String, dynamic>

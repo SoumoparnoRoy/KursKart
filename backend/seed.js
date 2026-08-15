@@ -4,11 +4,45 @@ const bcrypt = require('bcryptjs');
 const User = require('./models/user');
 const Store = require('./models/store');
 const Product = require('./models/product');
+const Order = require('./models/order');
+const Review = require('./models/review');
 
 
 // Re-runnable: it only ever removes the stores and products belonging to the
 // seeded vendors below, so real accounts and their data are left alone.
 const VENDOR_PASSWORD = "vendorpass123";
+const SHOPPER_PASSWORD = "shopperpass123";
+
+// Reviews need a delivered order behind them, exactly as the API demands, so
+// these accounts exist to have bought the things they review. Their addresses
+// are real-shaped because an order copies one at purchase time.
+const shoppers = [
+    {
+        fullName: "Ananya Bose", email: "shopper.ananya@kurskart.dev",
+        addressLine: "14 Southern Avenue", locality: "Lake Market",
+        city: "Kolkata", state: "West Bengal", pincode: "700029", phone: "9830012345",
+    },
+    {
+        fullName: "Rohan Mehta", email: "shopper.rohan@kurskart.dev",
+        addressLine: "27 Koregaon Park Road", locality: "Mundhwa",
+        city: "Pune", state: "Maharashtra", pincode: "411001", phone: "9822045678",
+    },
+    {
+        fullName: "I. Fernandes", email: "shopper.isabel@kurskart.dev",
+        addressLine: "9 Hill Road", locality: "Bandra West",
+        city: "Mumbai", state: "Maharashtra", pincode: "400050", phone: "9867098765",
+    },
+    {
+        fullName: "Karthik Iyer", email: "shopper.karthik@kurskart.dev",
+        addressLine: "52 Sarjapur Road", locality: "Koramangala",
+        city: "Bengaluru", state: "Karnataka", pincode: "560034", phone: "9845023456",
+    },
+    {
+        fullName: "Meera Saxena", email: "shopper.meera@kurskart.dev",
+        addressLine: "3 Rajpur Road", locality: "Civil Lines",
+        city: "Dehradun", state: "Uttarakhand", pincode: "248001", phone: "9411034567",
+    },
+];
 
 const vendors = [
     {
@@ -57,6 +91,56 @@ const productsByVendor = {
     ],
 };
 
+// Picked by star rating, so a five-star row never reads like a grudging three.
+// Deterministic selection keeps the text stable across reseeds.
+const COMMENTS = {
+    5: [
+        "Exactly what I wanted. Would buy again without thinking about it.",
+        "Better than I expected for the price. No complaints at all.",
+        "Arrived quickly and has held up to daily use so far.",
+        "Genuinely well made. The details are where the money went.",
+        "Second one I've bought. That should say enough.",
+    ],
+    4: [
+        "Very good overall, only small things keep it off full marks.",
+        "Does the job well. Packaging could have been better.",
+        "Happy with it. Slightly different in person than in the photos.",
+        "Solid quality, though it took a few days to get used to.",
+        "Good value. I'd recommend it with minor reservations.",
+    ],
+    3: [
+        "Does what it says, nothing more. Fine for the price.",
+        "Average. Works, but I doubt it will last years.",
+        "Mixed feelings — good in some ways, disappointing in others.",
+        "Acceptable, but I'd look around before buying again.",
+    ],
+    2: [
+        "Not really what I expected from the description.",
+        "Works, but the build quality is disappointing.",
+        "Had problems within the first couple of weeks.",
+    ],
+    1: [
+        "Stopped working almost immediately. Would not buy again.",
+        "Nothing like the photos. Sending it back.",
+    ],
+};
+
+/// Splits a target average into `count` whole-star ratings that land as close
+/// to it as five or so reviews can — the mean of n integers moves in steps of
+/// 1/n, so the derived rating rarely matches the target exactly. That is the
+/// point: after this runs, the number on screen is whatever the reviews say.
+function ratingsFor(target, count) {
+    const total = Math.round(target * count);
+    const base = Math.floor(total / count);
+    const generous = total % count;
+
+    // Spread evenly rather than filling greedily: a 4.6 becomes 5,5,5,4,4 and
+    // not 5,5,5,5,3, which would leave one baffling low review on every page.
+    return Array.from({ length: count }, (_, i) =>
+        Math.min(5, Math.max(1, i < generous ? base + 1 : base)),
+    );
+}
+
 /// Products are matched on (store, name), so two entries sharing a name inside
 /// one vendor would silently overwrite each other and one product would just be
 /// missing. Caught here, before anything is written.
@@ -73,6 +157,133 @@ function assertNamesAreUnique() {
             seen.add(name);
         }
     }
+}
+
+/// Gives every seeded product the reviews its target rating implies, along with
+/// the delivered orders that entitle them — the API refuses a review without
+/// one, and the seeder has no business going around its own rules.
+///
+/// Unlike products, seeded orders and reviews are torn down and rebuilt on each
+/// run rather than matched in place, so their ids are not stable. Nothing holds
+/// them but each other, and they belong to demo accounts only.
+async function seedReviews(reviewable) {
+    const salt = await bcrypt.genSalt(10);
+    const shopperPassword = await bcrypt.hash(SHOPPER_PASSWORD, salt);
+
+    const accounts = [];
+    for (const shopper of shoppers) {
+        accounts.push(await User.findOneAndUpdate(
+            { email: shopper.email },
+            { $set: { ...shopper, password: shopperPassword, role: "customer" } },
+            { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
+        ));
+    }
+
+    const shopperIds = accounts.map((a) => a._id);
+
+    // Only the demo shoppers' own orders are rebuilt. A real customer's orders
+    // and reviews are never in range.
+    //
+    // Reviews are upserted on (product, user) further down rather than deleted
+    // and recreated: if someone signs in as a demo shopper and writes a review
+    // by hand, deleting only seeded:true rows would leave theirs in place and
+    // the unique index would then reject the seeded one, taking the whole run
+    // down. Upserting absorbs it instead.
+    await Order.deleteMany({ user: { $in: shopperIds } });
+
+    // Which products each shopper reviewed, grouped so one delivered order can
+    // cover everything they bought from a single store.
+    const basket = new Map();
+
+    const pending = [];
+    reviewable.forEach((entry, productIndex) => {
+        // Three to five reviews, varied so the catalogue does not look stamped
+        // out, and derived from the index so a reseed produces the same page.
+        const count = 3 + (productIndex % 3);
+        const ratings = ratingsFor(entry.target, count);
+
+        ratings.forEach((rating, i) => {
+            const reviewer = accounts[(productIndex + i) % accounts.length];
+            const pool = COMMENTS[rating];
+
+            pending.push({
+                entry,
+                reviewer,
+                rating,
+                comment: pool[(productIndex + i) % pool.length],
+            });
+
+            const key = `${reviewer._id}:${entry.store._id}`;
+            if (!basket.has(key)) {
+                basket.set(key, { reviewer, store: entry.store, products: [] });
+            }
+            basket.get(key).products.push(entry.product);
+        });
+    });
+
+    // One delivered order per shopper per store, holding everything of theirs.
+    const orderFor = new Map();
+    for (const [key, { reviewer, store, products }] of basket) {
+        const items = products.map((p) => ({
+            product: p._id,
+            name: p.name,
+            price: p.price,
+            image: p.images?.[0] ?? "",
+            quantity: 1,
+            store: store._id,
+            storeName: store.name,
+            status: "delivered",
+        }));
+
+        const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+
+        const order = await Order.create({
+            user: reviewer._id,
+            items,
+            shippingAddress: {
+                addressLine: reviewer.addressLine, locality: reviewer.locality,
+                city: reviewer.city, state: reviewer.state,
+                pincode: reviewer.pincode, phone: reviewer.phone,
+            },
+            subtotal,
+            total: subtotal,
+        });
+
+        orderFor.set(key, order);
+    }
+
+    const kept = [];
+    for (const { entry, reviewer, rating, comment } of pending) {
+        const review = await Review.findOneAndUpdate(
+            { product: entry.product._id, user: reviewer._id },
+            {
+                $set: {
+                    userName: reviewer.fullName,
+                    // Repointed at the order just rebuilt, so the proof-of-
+                    // purchase reference never dangles.
+                    order: orderFor.get(`${reviewer._id}:${entry.store._id}`)._id,
+                    rating,
+                    comment,
+                    seeded: true,
+                },
+            },
+            { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
+        );
+
+        kept.push(review._id);
+    }
+
+    // Drops seeded rows the plan no longer covers — a product removed from the
+    // catalogue, or a lower review count than a previous run produced.
+    await Review.deleteMany({ seeded: true, _id: { $nin: kept } });
+
+    // The averages on the products come from the rows just written, through the
+    // same path the API uses.
+    for (const { product } of reviewable) {
+        await Review.refreshProductRating(product._id);
+    }
+
+    return { reviewCount: pending.length, orderCount: orderFor.size };
 }
 
 async function seed() {
@@ -93,6 +304,10 @@ async function seed() {
 
     let storeCount = 0;
     let productCount = 0;
+
+    // Filled while products are written, then used to build the delivered
+    // orders and reviews that give every product its stars.
+    const reviewable = [];
 
     for (const vendor of vendors) {
         const user = await User.findOneAndUpdate(
@@ -122,7 +337,10 @@ async function seed() {
         let vendorTotal = 0;
         const seededNames = [];
 
-        for (const { photo, ...p } of productsByVendor[vendor.key]) {
+        // `rating` is stripped out here: it is the target the seeded reviews
+        // aim at, not a value to write. Product.rating is owned entirely by
+        // Review.refreshProductRating now.
+        for (const { photo, rating, ...p } of productsByVendor[vendor.key]) {
             seededNames.push(p.name);
 
             const result = await Product.findOneAndUpdate(
@@ -148,6 +366,12 @@ async function seed() {
             if (result.lastErrorObject?.upserted) created += 1;
             vendorTotal += 1;
             productCount += 1;
+
+            reviewable.push({
+                product: result.value,
+                store,
+                target: rating,
+            });
         }
 
         // Scoped to seeded:true so this only ever removes rows the seeder owns.
@@ -164,9 +388,14 @@ async function seed() {
         );
     }
 
+    const { reviewCount, orderCount } = await seedReviews(reviewable);
+
     console.log(`\nSeeded ${storeCount} stores and ${productCount} products.`);
+    console.log(`Seeded ${orderCount} delivered orders and ${reviewCount} reviews.`);
     console.log(`Vendor logins: ${vendors.map(v => v.email).join(", ")}`);
     console.log(`Vendor password: ${VENDOR_PASSWORD}`);
+    console.log(`Shopper logins: ${shoppers.map(s => s.email).join(", ")}`);
+    console.log(`Shopper password: ${SHOPPER_PASSWORD}`);
 
     await mongoose.disconnect();
 }

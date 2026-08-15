@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kurskart/models/cart.dart';
 import 'package:kurskart/models/order.dart';
 import 'package:kurskart/models/product.dart';
+import 'package:kurskart/models/review.dart';
 import 'package:kurskart/models/user.dart';
 import 'package:kurskart/providers/auth_provider.dart';
 import 'package:kurskart/providers/product_provider.dart';
@@ -170,6 +171,7 @@ void main() {
       images: const [],
       stock: 1,
       rating: 0,
+      ratingCount: 0,
       store: null,
     );
 
@@ -210,6 +212,82 @@ void main() {
         Product.fromMap({'_id': 'x', 'name': 'n', 'price': 1, 'stock': 0}).isInStock,
         isFalse,
       );
+    });
+
+    test('an unreviewed product is unrated, not zero-rated', () {
+      final unrated = Product.fromMap({'_id': 'x', 'name': 'n', 'price': 1});
+      expect(unrated.rating, 0);
+      expect(unrated.ratingCount, 0);
+      expect(unrated.hasRating, isFalse);
+
+      final rated = Product.fromMap({
+        '_id': 'x', 'name': 'n', 'price': 1,
+        'rating': 4.3, 'ratingCount': 3,
+      });
+      expect(rated.hasRating, isTrue);
+      expect(rated.rating, 4.3);
+    });
+  });
+
+  group('Review', () {
+    Map<String, dynamic> pageMap() => {
+      'reviews': [
+        {
+          '_id': 'r1',
+          'product': 'p1',
+          'user': 'u1',
+          'userName': 'Karthik Iyer',
+          'rating': 4,
+          'comment': 'Solid quality.',
+          'createdAt': '2026-08-15T09:00:00.000Z',
+        },
+        {'_id': 'r2', 'product': 'p1', 'user': 'u2', 'rating': 5},
+      ],
+      'distribution': {'1': 0, '2': 0, '3': 1, '4': 2, '5': 6},
+      'total': 9,
+    };
+
+    test('reads a review and falls back for a missing name', () {
+      final page = ReviewPage.fromMap(pageMap());
+
+      expect(page.reviews.first.displayName, 'Karthik Iyer');
+      expect(page.reviews.first.rating, 4);
+      expect(page.reviews.first.writtenAt, isNotNull);
+      // No userName on the second one, as an older account might have.
+      expect(page.reviews.last.displayName, 'A customer');
+      expect(page.reviews.last.comment, '');
+    });
+
+    test('reads the distribution keyed by int, filling gaps', () {
+      final page = ReviewPage.fromMap(pageMap());
+
+      expect(page.distribution[5], 6);
+      expect(page.distribution[1], 0);
+      expect(page.total, 9);
+      // Scales the bars against the busiest band.
+      expect(page.busiestBand, 6);
+    });
+
+    test('busiest band is never zero, so bars can divide by it', () {
+      expect(ReviewPage.empty.busiestBand, 1);
+      expect(ReviewPage.fromMap({'reviews': [], 'total': 0}).busiestBand, 1);
+    });
+
+    test('eligibility separates may-review from already-reviewed', () {
+      final fresh = ReviewEligibility.fromMap({
+        'canReview': true,
+        'review': null,
+      });
+      expect(fresh.canReview, isTrue);
+      expect(fresh.mine, isNull);
+
+      final written = ReviewEligibility.fromMap({
+        'canReview': true,
+        'review': {'_id': 'r1', 'rating': 3},
+      });
+      expect(written.mine?.rating, 3);
+
+      expect(ReviewEligibility.none.canReview, isFalse);
     });
   });
 
