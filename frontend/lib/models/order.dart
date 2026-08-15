@@ -11,6 +11,7 @@ class OrderItem {
     required this.image,
     required this.quantity,
     required this.storeName,
+    required this.status,
   });
 
   final String productId;
@@ -19,6 +20,10 @@ class OrderItem {
   final String image;
   final int quantity;
   final String storeName;
+
+  /// Each line carries its own status, because an order can span several
+  /// stores and each vendor only moves their own items.
+  final String status;
 
   int get lineTotal => price * quantity;
 
@@ -32,6 +37,8 @@ class OrderItem {
       image: map['image'] as String? ?? '',
       quantity: (map['quantity'] as num?)?.toInt() ?? 1,
       storeName: map['storeName'] as String? ?? '',
+      // Lines placed before per-line status existed have none.
+      status: map['status'] as String? ?? 'placed',
     );
   }
 }
@@ -44,13 +51,32 @@ class Order {
     required this.status,
     required this.placedAt,
     required this.shippingAddress,
+    this.customerName = '',
   });
 
   final String id;
   final List<OrderItem> items;
   final int total;
+
+  /// Rolled up by the server from the item statuses: the order is only as far
+  /// along as its least advanced live line.
   final String status;
   final DateTime? placedAt;
+
+  /// Who placed the order. Only sent on the vendor endpoint — a vendor needs a
+  /// name to ship to, and the address does not carry one.
+  final String customerName;
+
+  /// A buyer may pull out only while nothing has shipped yet.
+  bool get canCancel => status == 'placed';
+
+  /// What this vendor is allowed to do next with their part of the order.
+  /// Mirrors the transitions the server enforces.
+  String? get nextVendorStatus => switch (status) {
+    'placed' => 'shipped',
+    'shipped' => 'delivered',
+    _ => null,
+  };
 
   /// Where this order was sent, as it read at purchase time. Orders placed
   /// before addresses existed have none.
@@ -76,6 +102,7 @@ class Order {
       status: map['status'] as String? ?? 'placed',
       placedAt: DateTime.tryParse(map['createdAt'] as String? ?? ''),
       shippingAddress: _formatAddress(map['shippingAddress']),
+      customerName: map['customerName'] as String? ?? '',
     );
   }
 

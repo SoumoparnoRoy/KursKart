@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kurskart/models/order.dart';
 import 'package:kurskart/providers/order_provider.dart';
+import 'package:kurskart/services/api_client.dart';
+import 'package:kurskart/views/widgets/order_status_chip.dart';
 
 class OrdersTab extends ConsumerWidget {
   const OrdersTab({super.key});
@@ -77,10 +79,19 @@ class OrdersTab extends ConsumerWidget {
   }
 }
 
-class _OrderCard extends StatelessWidget {
+class _OrderCard extends ConsumerStatefulWidget {
   const _OrderCard({required this.order});
 
   final Order order;
+
+  @override
+  ConsumerState<_OrderCard> createState() => _OrderCardState();
+}
+
+class _OrderCardState extends ConsumerState<_OrderCard> {
+  bool _busy = false;
+
+  Order get order => widget.order;
 
   String get _placedLabel {
     final at = order.placedAt?.toLocal();
@@ -92,6 +103,50 @@ class _OrderCard extends StatelessWidget {
     final hh = at.hour.toString().padLeft(2, '0');
     final mm = at.minute.toString().padLeft(2, '0');
     return '${at.day} ${months[at.month - 1]} ${at.year}, $hh:$mm';
+  }
+
+  Future<void> _confirmCancel() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cancel this order?'),
+        content: Text(
+          '${order.reference} will be cancelled and nothing will be shipped. '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Keep it'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Cancel order'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    try {
+      await ref.read(ordersProvider.notifier).cancel(order.id);
+      messenger.showSnackBar(
+        SnackBar(content: Text('${order.reference} cancelled')),
+      );
+    } on ApiException catch (e) {
+      // Covers the race where a vendor ships between the list loading and the
+      // button being pressed — the server refuses and says why.
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not cancel that order')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
@@ -116,7 +171,7 @@ class _OrderCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              _StatusChip(status: order.status),
+              OrderStatusChip(status: order.status),
               const Spacer(),
               Text(
                 order.formattedTotal,
@@ -175,12 +230,27 @@ class _OrderCard extends StatelessWidget {
                             fontSize: 14,
                           ),
                         ),
-                        Text(
-                          '${item.storeName} · qty ${item.quantity}',
-                          style: GoogleFonts.nunitoSans(
-                            fontSize: 12,
-                            color: Colors.black45,
-                          ),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                '${item.storeName} · qty ${item.quantity}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.nunitoSans(
+                                  fontSize: 12,
+                                  color: Colors.black45,
+                                ),
+                              ),
+                            ),
+                            // Only worth showing when this store is ahead of
+                            // the rest of the order; otherwise the chip at the
+                            // top already says it.
+                            if (item.status != order.status) ...[
+                              const SizedBox(width: 6),
+                              OrderStatusChip(status: item.status),
+                            ],
+                          ],
                         ),
                       ],
                     ),
@@ -223,39 +293,26 @@ class _OrderCard extends StatelessWidget {
               ),
             ),
           ],
+          if (order.canCancel) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.redAccent,
+                ),
+                onPressed: _busy ? null : _confirmCancel,
+                child: _busy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Cancel order'),
+              ),
+            ),
+          ],
         ],
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = switch (status) {
-      'delivered' => Colors.green.shade700,
-      'shipped' => Colors.blue.shade700,
-      'cancelled' => Colors.redAccent,
-      _ => Colors.orange.shade800,
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        status[0].toUpperCase() + status.substring(1),
-        style: GoogleFonts.nunitoSans(
-          color: color,
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
-        ),
       ),
     );
   }

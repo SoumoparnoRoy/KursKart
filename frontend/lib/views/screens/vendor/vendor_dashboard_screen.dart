@@ -7,16 +7,31 @@ import 'package:kurskart/providers/vendor_provider.dart';
 import 'package:kurskart/services/api_client.dart';
 import 'package:kurskart/views/screens/vendor/product_form_screen.dart';
 import 'package:kurskart/views/screens/vendor/store_form_screen.dart';
+import 'package:kurskart/views/screens/vendor/vendor_orders_tab.dart';
 
-class VendorDashboardScreen extends ConsumerWidget {
+class VendorDashboardScreen extends ConsumerStatefulWidget {
   const VendorDashboardScreen({super.key});
 
-  static const _accent = Color.fromARGB(255, 0, 47, 255);
+  static const accent = Color.fromARGB(255, 0, 47, 255);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<VendorDashboardScreen> createState() =>
+      _VendorDashboardScreenState();
+}
+
+class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs = TabController(length: 2, vsync: this);
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final store = ref.watch(myStoreProvider);
-    final products = ref.watch(myProductsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -27,19 +42,38 @@ class VendorDashboardScreen extends ConsumerWidget {
           'Your Store',
           style: GoogleFonts.lato(fontWeight: FontWeight.bold, fontSize: 18),
         ),
+        bottom: TabBar(
+          controller: _tabs,
+          labelColor: VendorDashboardScreen.accent,
+          indicatorColor: VendorDashboardScreen.accent,
+          unselectedLabelColor: Colors.black54,
+          labelStyle: GoogleFonts.nunitoSans(fontWeight: FontWeight.w600),
+          tabs: const [
+            Tab(text: 'Products'),
+            Tab(text: 'Orders'),
+          ],
+        ),
       ),
-      floatingActionButton: store.value == null
-          ? null
-          : FloatingActionButton.extended(
-              backgroundColor: _accent,
-              foregroundColor: Colors.white,
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ProductFormScreen()),
-              ),
-              icon: const Icon(Icons.add),
-              label: const Text('Add product'),
+      // Adding a product from the Orders tab would make no sense, so the
+      // button follows the tab rather than the screen.
+      floatingActionButton: AnimatedBuilder(
+        animation: _tabs.animation ?? _tabs,
+        builder: (context, _) {
+          if (store.value == null || _tabs.index != 0) {
+            return const SizedBox.shrink();
+          }
+          return FloatingActionButton.extended(
+            backgroundColor: VendorDashboardScreen.accent,
+            foregroundColor: Colors.white,
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProductFormScreen()),
             ),
+            icon: const Icon(Icons.add),
+            label: const Text('Add product'),
+          );
+        },
+      ),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -52,62 +86,71 @@ class VendorDashboardScreen extends ConsumerWidget {
               ),
               data: (s) => s == null
                   ? const Center(child: Text('No store'))
-                  : RefreshIndicator(
-                      onRefresh: () =>
-                          ref.read(myProductsProvider.notifier).refresh(),
-                      child: ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
-                        children: [
-                          _StoreHeader(store: s),
-                          const SizedBox(height: 20),
-                          Text(
-                            'Products',
-                            style: GoogleFonts.lato(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          products.when(
-                            loading: () => const Padding(
-                              padding: EdgeInsets.all(24),
-                              child: Center(
-                                child: CircularProgressIndicator(),
-                              ),
-                            ),
-                            error: (e, _) => _Retry(
-                              message: '$e',
-                              onRetry: () => ref
-                                  .read(myProductsProvider.notifier)
-                                  .refresh(),
-                            ),
-                            data: (list) => list.isEmpty
-                                ? Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 32,
-                                    ),
-                                    child: Text(
-                                      'No products yet. Add your first one.',
-                                      textAlign: TextAlign.center,
-                                      style: GoogleFonts.nunitoSans(
-                                        color: Colors.black54,
-                                      ),
-                                    ),
-                                  )
-                                : Column(
-                                    children: [
-                                      for (final p in list)
-                                        _VendorProductRow(product: p),
-                                    ],
-                                  ),
-                          ),
-                        ],
-                      ),
+                  : TabBarView(
+                      controller: _tabs,
+                      children: [
+                        _ProductsTab(store: s),
+                        const VendorOrdersTab(),
+                      ],
                     ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ProductsTab extends ConsumerWidget {
+  const _ProductsTab({required this.store});
+
+  final Store store;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final products = ref.watch(myProductsProvider);
+
+    return RefreshIndicator(
+      onRefresh: () => ref.read(myProductsProvider.notifier).refresh(),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
+        children: [
+          _StoreHeader(store: store),
+          const SizedBox(height: 20),
+          Text(
+            'Products',
+            style: GoogleFonts.lato(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          products.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => _Retry(
+              message: '$e',
+              onRetry: () => ref.read(myProductsProvider.notifier).refresh(),
+            ),
+            data: (list) => list.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 32),
+                    child: Text(
+                      'No products yet. Add your first one.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.nunitoSans(color: Colors.black54),
+                    ),
+                  )
+                : Column(
+                    children: [
+                      for (final p in list) _VendorProductRow(product: p),
+                    ],
+                  ),
+          ),
+        ],
       ),
     );
   }

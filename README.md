@@ -131,6 +131,9 @@ https-only.
 | POST   | `/api/orders`                   | `x-auth-token` | Turn the cart into an order          |
 | GET    | `/api/orders`                   | `x-auth-token` | Your orders, newest first            |
 | GET    | `/api/orders/:id`               | `x-auth-token` | A single order you own               |
+| PATCH  | `/api/orders/:id/cancel`        | `x-auth-token` | Cancel your own order while unshipped |
+| GET    | `/api/orders/vendor`            | vendor         | Orders containing your products      |
+| PATCH  | `/api/orders/:id/status`        | vendor         | Move your own lines along            |
 
 Every cart mutation returns the full cart, so a client never needs a follow-up
 read. Prices are whole rupees stored as integers.
@@ -148,6 +151,17 @@ never rewrites past orders. The delivery address is copied the same way.
 Each user has one delivery address. Checkout refuses without it, returning
 `code: "ADDRESS_REQUIRED"` so the client can send the user to the form rather
 than showing a raw error. Pincode and phone follow Indian formats.
+
+Order status lives on each **line**, not on the order, because one order can
+span several stores and a vendor may only move their own items. The order-level
+`status` is rolled up from the lines on every write and stored so it can be
+queried: an order is only as far along as its least advanced live line, and
+counts as cancelled once nothing is left to deliver. Legal moves are
+`placed → shipped → delivered` and `placed → cancelled`; the last two are
+terminal. `GET /api/orders/vendor` trims every order to the caller's own lines
+and recomputes the total from them, so a vendor never sees what another store
+sold to the same customer. Cancelling — by either side — puts the reserved stock
+back. A buyer cancels the whole order and only while nothing has shipped.
 
 Owning a store is what makes an account a vendor — `POST /api/stores` sets the
 role as a side effect, and there is one store per user. Vendor routes scope
@@ -217,8 +231,10 @@ flutter analyze
 - Delivery address, editable in Profile and required at checkout
 - Product search across name and description
 - Vendor side: open a store from Profile, then add, edit and delete products
+- Vendor Orders tab: incoming orders, with per-store status transitions
+- Buyers can cancel an order until it ships; cancelling restores stock
 - Not yet implemented: payments, image uploads (product images are URLs), and
-  order status transitions — orders stay at `placed`
+  notifications — neither side is told when a status changes
 
 ---
 

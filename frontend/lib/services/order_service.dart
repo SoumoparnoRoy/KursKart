@@ -19,4 +19,12 @@ class OrderService {
         .map(Order.fromMap)
         .toList();
   }
+
+  /// Cancels the whole order and returns it in its new state. The server puts
+  /// the stock back, and refuses once anything has shipped.
+  Future<Order> cancelOrder(String token, String id) async {
+    return Order.fromMap(
+      await _client.patch('/api/orders/$id/cancel', token: token),
+    );
+  }
 }

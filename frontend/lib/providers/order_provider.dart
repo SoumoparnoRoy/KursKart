@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kurskart/models/order.dart';
 import 'package:kurskart/providers/auth_provider.dart';
 import 'package:kurskart/providers/cart_provider.dart';
+import 'package:kurskart/providers/product_provider.dart';
 import 'package:kurskart/services/order_service.dart';
 
 final orderServiceProvider = Provider<OrderService>(
@@ -44,6 +45,29 @@ class OrdersNotifier extends AsyncNotifier<List<Order>> {
     state = AsyncValue.data([order, ...?state.value]);
 
     return order;
+  }
+
+  /// Cancels an order and swaps the returned copy into the list in place, so
+  /// the card updates without a round trip for the whole list.
+  ///
+  /// Lets [ApiException] propagate so the screen can show the server's reason
+  /// for refusing, such as the order having already shipped.
+  Future<void> cancel(String id) async {
+    final token = await _token;
+    if (token == null) {
+      throw StateError('Cannot cancel an order while signed out');
+    }
+
+    final updated = await _service.cancelOrder(token, id);
+
+    state = AsyncValue.data([
+      for (final o in state.value ?? const <Order>[])
+        if (o.id == updated.id) updated else o,
+    ]);
+
+    // Cancelling puts the reserved stock back, so anything showing stock is
+    // now out of date.
+    ref.invalidate(productFeedProvider);
   }
 
   Future<void> refresh() async {

@@ -1,3 +1,4 @@
+import 'package:kurskart/models/order.dart';
 import 'package:kurskart/models/product.dart';
 import 'package:kurskart/models/store.dart';
 import 'package:kurskart/services/api_client.dart';
@@ -113,5 +114,34 @@ class VendorService {
 
   Future<void> deleteProduct(String token, String id) async {
     await _client.delete('/api/products/$id', token: token);
+  }
+
+  /// Orders containing at least one of this store's products. The server trims
+  /// each one to the caller's own lines, so totals here are their share only.
+  Future<List<Order>> fetchVendorOrders(String token) async {
+    try {
+      final body = await _client.get('/api/orders/vendor', token: token);
+      return (body['orders'] as List? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(Order.fromMap)
+          .toList();
+    } on ApiException catch (e) {
+      // Not a vendor yet, so there is nothing to list.
+      if (e.statusCode == 403 || e.statusCode == 404) return const [];
+      rethrow;
+    }
+  }
+
+  Future<Order> updateOrderStatus(
+    String token,
+    String id, {
+    required String status,
+  }) async {
+    final body = await _client.patch(
+      '/api/orders/$id/status',
+      token: token,
+      body: {'status': status},
+    );
+    return Order.fromMap(body);
   }
 }

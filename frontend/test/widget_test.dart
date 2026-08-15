@@ -304,6 +304,52 @@ void main() {
       expect(order.placedAt, isNull);
       expect(order.itemCount, 0);
     });
+
+    test('reads a per-line status, defaulting for older orders', () {
+      // The seeded line carries no status, as orders placed before per-line
+      // status existed do not.
+      final map = orderMap();
+      (map['items'] as List).add({
+        'product': 'p2',
+        'name': 'Cotton Tote',
+        'price': 400,
+        'quantity': 1,
+        'storeName': 'Paper Lane',
+        'status': 'shipped',
+      });
+
+      final order = Order.fromMap(map);
+      expect(order.items.first.status, 'placed');
+      expect(order.items.last.status, 'shipped');
+    });
+
+    test('offers cancelling only while nothing has shipped', () {
+      bool cancellable(String status) =>
+          Order.fromMap({...orderMap(), 'status': status}).canCancel;
+
+      expect(cancellable('placed'), isTrue);
+      expect(cancellable('shipped'), isFalse);
+      expect(cancellable('delivered'), isFalse);
+      expect(cancellable('cancelled'), isFalse);
+    });
+
+    test('advances the vendor status one step, then stops', () {
+      String? next(String status) =>
+          Order.fromMap({...orderMap(), 'status': status}).nextVendorStatus;
+
+      expect(next('placed'), 'shipped');
+      expect(next('shipped'), 'delivered');
+      expect(next('delivered'), isNull);
+      expect(next('cancelled'), isNull);
+    });
+
+    test('customer name is empty unless the vendor endpoint sent one', () {
+      expect(Order.fromMap(orderMap()).customerName, '');
+      expect(
+        Order.fromMap({...orderMap(), 'customerName': 'Ada'}).customerName,
+        'Ada',
+      );
+    });
   });
 
   group('User address', () {

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:kurskart/models/order.dart';
 import 'package:kurskart/models/product.dart';
 import 'package:kurskart/models/store.dart';
 import 'package:kurskart/providers/auth_provider.dart';
@@ -169,6 +170,66 @@ class MyProductsNotifier extends AsyncNotifier<List<Product>> {
       final token = await _token;
       if (token == null) return const <Product>[];
       return _service.fetchMyProducts(token);
+    });
+  }
+}
+
+/// Orders that include something from the vendor's own store, trimmed by the
+/// server to their lines only.
+final vendorOrdersProvider =
+    AsyncNotifierProvider<VendorOrdersNotifier, List<Order>>(
+      VendorOrdersNotifier.new,
+    );
+
+class VendorOrdersNotifier extends AsyncNotifier<List<Order>> {
+  Future<String?> get _token => ref.read(tokenStorageProvider).read();
+  VendorService get _service => ref.read(vendorServiceProvider);
+
+  @override
+  Future<List<Order>> build() async {
+    final user = ref.watch(authProvider).value;
+    if (user == null || !user.isVendor) return const [];
+
+    final token = await _token;
+    if (token == null) return const [];
+
+    return _service.fetchVendorOrders(token);
+  }
+
+  /// Advances this vendor's part of an order and swaps the returned copy into
+  /// the list, so only the one card changes.
+  ///
+  /// Lets [ApiException] propagate — the server's message names the illegal
+  /// transition, which is more useful than a generic failure.
+  Future<void> setStatus(String id, String status) async {
+    final token = await _token;
+    if (token == null) throw StateError('Signed out');
+
+    final updated = await _service.updateOrderStatus(
+      token,
+      id,
+      status: status,
+    );
+
+    state = AsyncValue.data([
+      for (final o in state.value ?? const <Order>[])
+        if (o.id == updated.id) updated else o,
+    ]);
+
+    // Cancelling releases the reserved units, so the vendor's own stock
+    // figures and the public feed are both stale.
+    if (status == 'cancelled') {
+      await ref.read(myProductsProvider.notifier).refresh();
+      ref.invalidate(productFeedProvider);
+    }
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      final token = await _token;
+      if (token == null) return const <Order>[];
+      return _service.fetchVendorOrders(token);
     });
   }
 }
