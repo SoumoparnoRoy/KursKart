@@ -10,8 +10,13 @@ const Review = require('./models/review');
 
 // Re-runnable: it only ever removes the stores and products belonging to the
 // seeded vendors below, so real accounts and their data are left alone.
-const VENDOR_PASSWORD = "vendorpass123";
-const SHOPPER_PASSWORD = "shopperpass123";
+//
+// Both passwords come from the environment with no fallback. A default here
+// would be a working credential published in the repository, and these accounts
+// are not toys: a vendor login can read every customer name, address and phone
+// number on its store's orders.
+const VENDOR_PASSWORD = process.env.VENDOR_PASSWORD;
+const SHOPPER_PASSWORD = process.env.SHOPPER_PASSWORD;
 
 // Reviews need a delivered order behind them, exactly as the API demands, so
 // these accounts exist to have bought the things they review. Their addresses
@@ -139,6 +144,31 @@ function ratingsFor(target, count) {
     return Array.from({ length: count }, (_, i) =>
         Math.min(5, Math.max(1, i < generous ? base + 1 : base)),
     );
+}
+
+/// True only for a database on this machine. Used to decide whether seeding
+/// needs an explicit go-ahead, so the check has to fail closed: anything it
+/// cannot recognise counts as remote.
+function targetsLocalhost(uri) {
+    return /(\/\/|@)(localhost|127\.0\.0\.1|\[::1\])([:/]|$)/.test(uri);
+}
+
+/// The seeder rewrites products, wipes the demo shoppers' order history, resets
+/// stock and creates accounts whose password whoever ran it knows. Pointing it
+/// at a shared database should take a deliberate act rather than being what
+/// happens when MONGO_URI is left as it was.
+function assertSafeTarget() {
+    if (process.env.NODE_ENV === "production") {
+        throw new Error("Refusing to run with NODE_ENV=production.");
+    }
+
+    if (!targetsLocalhost(process.env.MONGO_URI ?? "") && process.env.SEED_ALLOW !== "yes") {
+        throw new Error(
+            "MONGO_URI does not point at localhost. Seeding a shared database " +
+            "overwrites products, resets stock and rebuilds the demo order " +
+            "history. Re-run with SEED_ALLOW=yes if that is the intention.",
+        );
+    }
 }
 
 /// Products are matched on (store, name), so two entries sharing a name inside
@@ -287,13 +317,14 @@ async function seedReviews(reviewable) {
 }
 
 async function seed() {
-    for (const key of ["MONGO_URI"]) {
+    for (const key of ["MONGO_URI", "VENDOR_PASSWORD", "SHOPPER_PASSWORD"]) {
         if (!process.env[key]) {
             console.error(`Missing required environment variable: ${key}`);
             process.exit(1);
         }
     }
 
+    assertSafeTarget();
     assertNamesAreUnique();
 
     await mongoose.connect(process.env.MONGO_URI);
@@ -323,9 +354,14 @@ async function seed() {
             { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
         );
 
+        // Matched on (seeded, name) rather than on owner. Owner looks like the
+        // natural key, but it breaks the moment an account is deleted and
+        // recreated — the new user gets a new id, no store matches it, and the
+        // seeder builds a second copy of the whole catalogue alongside the
+        // original. Matching by name re-owns the existing store instead.
         const store = await Store.findOneAndUpdate(
-            { owner: user._id },
-            { $set: { owner: user._id, ...vendor.store } },
+            { seeded: true, name: vendor.store.name },
+            { $set: { owner: user._id, seeded: true, ...vendor.store } },
             { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
         );
         storeCount += 1;
@@ -392,10 +428,12 @@ async function seed() {
 
     console.log(`\nSeeded ${storeCount} stores and ${productCount} products.`);
     console.log(`Seeded ${orderCount} delivered orders and ${reviewCount} reviews.`);
+    // The passwords themselves are never printed: this output ends up in
+    // terminal scrollback and CI logs, which is the same mistake as hardcoding
+    // them, one step removed.
     console.log(`Vendor logins: ${vendors.map(v => v.email).join(", ")}`);
-    console.log(`Vendor password: ${VENDOR_PASSWORD}`);
     console.log(`Shopper logins: ${shoppers.map(s => s.email).join(", ")}`);
-    console.log(`Shopper password: ${SHOPPER_PASSWORD}`);
+    console.log("Passwords are whatever VENDOR_PASSWORD and SHOPPER_PASSWORD were set to.");
 
     await mongoose.disconnect();
 }

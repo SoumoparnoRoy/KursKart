@@ -66,7 +66,9 @@ PORT = 3000
 JWT_SECRET = <a long random string>
 ```
 
-The server exits immediately with a clear message if `MONGO_URI` or `JWT_SECRET` is missing.
+See `backend/.env.example` for the full list, including the seeder-only
+variables covered below. The server exits immediately with a clear message if
+`MONGO_URI` or `JWT_SECRET` is missing.
 
 ```bash
 cd backend
@@ -85,8 +87,47 @@ npm run seed
 Re-runnable. It upserts two vendors with their stores and products, five demo
 shoppers, a delivered order for each shopper and store, and the reviews those
 orders entitle — so every star in the catalogue is backed by a real row rather
-than a hardcoded number. The script prints the logins and passwords when it
-finishes.
+than a hardcoded number. The script prints the logins when it finishes.
+
+`VENDOR_PASSWORD` and `SHOPPER_PASSWORD` must be set; there is no fallback and
+the passwords are never printed. These are real credentials despite the made-up
+catalogue behind them — a vendor login can read every customer name, address and
+phone number on that store's orders — so they do not belong in the repository or
+in terminal scrollback.
+
+The seeder refuses to run under `NODE_ENV=production`, and for any `MONGO_URI`
+that is not localhost it requires an explicit opt-in, because it overwrites
+products, resets stock and rebuilds the demo order history:
+
+```bash
+SEED_ALLOW=yes npm run seed
+```
+
+To remove the demo accounts from a database that has already been seeded — for
+instance to retire a password that has been shared or committed:
+
+```bash
+npm run seed:purge
+```
+
+It lists what it found and, against a non-local database, stops there unless
+`SEED_ALLOW=yes` is set. It removes the accounts and their orders; stores,
+products and reviews stay, so the catalogue keeps working and ratings keep the
+reviews behind them. The seeded stores are simply left with no owner who can
+sign in, and `npm run seed` re-owns them on the next run.
+
+Seeded stores are matched on their **name**, not on `owner`. Owner looks like
+the natural key but breaks as soon as an account is deleted and recreated: the
+new user has a new id, no store matches it, and the seeder builds a duplicate
+catalogue beside the original. If a database is already in that state:
+
+```bash
+npm run seed:repair
+```
+
+It drops duplicate seeded stores — keeping the copy that still has an owner and
+carries the reviews — along with their products, and removes orders whose buyer
+no longer exists. Same opt-in rule, and a no-op on a healthy database.
 
 Products are matched on (store, name) and updated in place, so their ids survive
 a reseed and open carts keep working. Reviews are matched on (product, user) for

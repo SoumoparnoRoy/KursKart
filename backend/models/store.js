@@ -32,6 +32,14 @@ const storeSchema = mongoose.Schema({
         type: Boolean,
         default: true,
     },
+
+    // Same purpose as the flag on Product: marks rows the seeder owns, so it can
+    // find its own store again by name after the owning account has been
+    // deleted and recreated with a new id.
+    seeded: {
+        type: Boolean,
+        default: false,
+    },
 }, { timestamps: true });
 
 const Store = mongoose.model("Store", storeSchema);
