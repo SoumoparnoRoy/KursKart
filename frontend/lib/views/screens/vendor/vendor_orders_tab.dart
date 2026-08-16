@@ -84,18 +84,6 @@ class _VendorOrderCardState extends ConsumerState<_VendorOrderCard> {
 
   Order get _order => widget.order;
 
-  String get _placedLabel {
-    final at = _order.placedAt?.toLocal();
-    if (at == null) return '';
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    final hh = at.hour.toString().padLeft(2, '0');
-    final mm = at.minute.toString().padLeft(2, '0');
-    return '${at.day} ${months[at.month - 1]} ${at.year}, $hh:$mm';
-  }
-
   Future<void> _setStatus(String status) async {
     final messenger = ScaffoldMessenger.of(context);
 
@@ -182,11 +170,11 @@ class _VendorOrderCardState extends ConsumerState<_VendorOrderCard> {
               ),
             ],
           ),
-          if (_placedLabel.isNotEmpty)
+          if (_order.formattedPlacedAt.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 2),
               child: Text(
-                _placedLabel,
+                _order.formattedPlacedAt,
                 style: GoogleFonts.nunitoSans(
                   fontSize: 12,
                   color: Colors.black45,

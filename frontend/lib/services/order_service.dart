@@ -20,6 +20,12 @@ class OrderService {
         .toList();
   }
 
+  /// One order the caller owns. The server scopes the lookup to the token, so
+  /// another user's id comes back as a 404 rather than their order.
+  Future<Order> fetchOrder(String token, String id) async {
+    return Order.fromMap(await _client.get('/api/orders/$id', token: token));
+  }
+
   /// Cancels the whole order and returns it in its new state. The server puts
   /// the stock back, and refuses once anything has shipped.
   Future<Order> cancelOrder(String token, String id) async {

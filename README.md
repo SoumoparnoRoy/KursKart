@@ -308,6 +308,8 @@ flutter analyze
 - Product search across name and description
 - Vendor side: open a store from Profile, then add, edit and delete products
 - Vendor Orders tab: incoming orders, with per-store status transitions
+- Order detail screen, re-read from the server so a vendor's shipment shows
+  without refreshing the list
 - Buyers can cancel an order until it ships; cancelling restores stock
 - Verified-purchase reviews, with product ratings derived from them
 - Not yet implemented: payments, image uploads (product images are URLs), and

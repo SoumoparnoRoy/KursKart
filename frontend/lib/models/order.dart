@@ -86,6 +86,20 @@ class Order {
 
   String get formattedTotal => formatRupees(total);
 
+  /// Empty on orders that predate `createdAt` being sent. Local time, since
+  /// "when did I order this" is a question about the buyer's own day.
+  String get formattedPlacedAt {
+    final at = placedAt?.toLocal();
+    if (at == null) return '';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final hh = at.hour.toString().padLeft(2, '0');
+    final mm = at.minute.toString().padLeft(2, '0');
+    return '${at.day} ${months[at.month - 1]} ${at.year}, $hh:$mm';
+  }
+
   /// Short id for display, e.g. "#59C0CA" — the full ObjectId is noise.
   String get reference => id.isEmpty
       ? ''

@@ -381,6 +381,20 @@ void main() {
       expect(order.status, 'placed');
       expect(order.placedAt, isNull);
       expect(order.itemCount, 0);
+      expect(order.formattedPlacedAt, '');
+    });
+
+    test('formats the placed date in the reader\'s own timezone', () {
+      // Derived rather than hardcoded, so the test does not assume the machine
+      // running it sits in any particular timezone.
+      final local = DateTime.parse('2026-08-13T16:45:00.000Z').toLocal();
+      final hh = local.hour.toString().padLeft(2, '0');
+      final mm = local.minute.toString().padLeft(2, '0');
+
+      expect(
+        Order.fromMap(orderMap()).formattedPlacedAt,
+        '${local.day} Aug ${local.year}, $hh:$mm',
+      );
     });
 
     test('reads a per-line status, defaulting for older orders', () {

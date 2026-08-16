@@ -13,6 +13,19 @@ final ordersProvider = AsyncNotifierProvider<OrdersNotifier, List<Order>>(
   OrdersNotifier.new,
 );
 
+/// One order, read fresh from the server. The list is only as current as the
+/// last pull-to-refresh, so opening an order is where a buyer finds out a
+/// vendor has shipped since.
+final orderDetailProvider = FutureProvider.family<Order, String>((
+  ref,
+  id,
+) async {
+  final token = await ref.read(tokenStorageProvider).read();
+  if (token == null) throw StateError('Cannot read an order while signed out');
+
+  return ref.read(orderServiceProvider).fetchOrder(token, id);
+});
+
 class OrdersNotifier extends AsyncNotifier<List<Order>> {
   Future<String?> get _token => ref.read(tokenStorageProvider).read();
 
@@ -68,6 +81,7 @@ class OrdersNotifier extends AsyncNotifier<List<Order>> {
     // Cancelling puts the reserved stock back, so anything showing stock is
     // now out of date.
     ref.invalidate(productFeedProvider);
+    ref.invalidate(orderDetailProvider(id));
   }
 
   Future<void> refresh() async {
