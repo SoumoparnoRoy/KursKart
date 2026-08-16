@@ -64,11 +64,16 @@ Create a `backend/.env` file with:
 MONGO_URI = <your MongoDB connection string>
 PORT = 3000
 JWT_SECRET = <a long random string>
+CLOUDINARY_CLOUD_NAME = <from the Cloudinary dashboard>
+CLOUDINARY_API_KEY = <from the Cloudinary dashboard>
+CLOUDINARY_API_SECRET = <from the Cloudinary dashboard>
 ```
 
 See `backend/.env.example` for the full list, including the seeder-only
 variables covered below. The server exits immediately with a clear message if
-`MONGO_URI` or `JWT_SECRET` is missing.
+`MONGO_URI` or `JWT_SECRET` is missing. The three Cloudinary keys are only
+warned about: without them everything works except image uploads, and that route
+says so with a 503.
 
 ```bash
 cd backend
@@ -198,6 +203,7 @@ https-only.
 | POST   | `/api/products/:id/reviews`     | `x-auth-token` | Review something delivered to you    |
 | PATCH  | `/api/reviews/:id`              | `x-auth-token` | Edit your own review                 |
 | DELETE | `/api/reviews/:id`              | `x-auth-token` | Delete your own review               |
+| POST   | `/api/uploads/signature`        | vendor         | Permit to upload one product image   |
 
 Every cart mutation returns the full cart, so a client never needs a follow-up
 read. Prices are whole rupees stored as integers.
@@ -238,6 +244,16 @@ orders, which is why order status had to come first. Buying is not enough: a
 cancelled order proves nothing. There is one review per person per product,
 enforced by a unique index, so editing goes through `PATCH` rather than a second
 row and the average cannot be stuffed by reviewing repeatedly.
+
+Product images are uploaded **straight from the app to Cloudinary**. The backend
+only signs the request: `POST /api/uploads/signature` returns a signature over a
+folder scoped to the caller's own store, so a vendor cannot write anywhere else,
+and the API secret never leaves the server. The bytes never pass through the
+backend at all, which matters on Vercel, where a serverless request body is
+capped well below what a phone camera produces. The product itself still stores
+nothing but a URL, so pasted links and the seeded catalogue keep working
+unchanged. Uploaded images are not deleted from Cloudinary when a product is
+deleted or its photo replaced.
 
 Owning a store is what makes an account a vendor — `POST /api/stores` sets the
 role as a side effect, and there is one store per user. Vendor routes scope
@@ -312,8 +328,10 @@ flutter analyze
   without refreshing the list
 - Buyers can cancel an order until it ships; cancelling restores stock
 - Verified-purchase reviews, with product ratings derived from them
-- Not yet implemented: payments, image uploads (product images are URLs), and
-  notifications — neither side is told when a status changes
+- Vendors upload a product photo from the camera or gallery, signed server-side
+  and stored on Cloudinary; pasting a link still works as a fallback
+- Not yet implemented: payments, and notifications — neither side is told when a
+  status changes
 
 ---
 

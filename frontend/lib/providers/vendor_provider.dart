@@ -4,10 +4,15 @@ import 'package:kurskart/models/product.dart';
 import 'package:kurskart/models/store.dart';
 import 'package:kurskart/providers/auth_provider.dart';
 import 'package:kurskart/providers/product_provider.dart';
+import 'package:kurskart/services/upload_service.dart';
 import 'package:kurskart/services/vendor_service.dart';
 
 final vendorServiceProvider = Provider<VendorService>(
   (ref) => const VendorService(),
+);
+
+final uploadServiceProvider = Provider<UploadService>(
+  (ref) => const UploadService(),
 );
 
 /// The caller's own store, or null if they have not opened one.

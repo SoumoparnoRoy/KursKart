@@ -7,6 +7,7 @@ const storeRouter = require('./routes/store');
 const cartRouter = require('./routes/cart');
 const orderRouter = require('./routes/order');
 const reviewRouter = require('./routes/review');
+const uploadRouter = require('./routes/upload');
 
 
 // Checked here rather than in index.js because serverless never runs index.js.
@@ -15,6 +16,14 @@ const reviewRouter = require('./routes/review');
 for (const key of ["MONGO_URI", "JWT_SECRET"]) {
     if (!process.env[key]) {
         console.error(`Missing required environment variable: ${key}`);
+    }
+}
+
+// Warned about rather than treated as fatal: without these only image uploads
+// stop working, and that route says so itself with a 503.
+for (const key of ["CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"]) {
+    if (!process.env[key]) {
+        console.warn(`Image uploads disabled, missing: ${key}`);
     }
 }
 
@@ -47,5 +56,6 @@ app.use(storeRouter);
 app.use(cartRouter);
 app.use(orderRouter);
 app.use(reviewRouter);
+app.use(uploadRouter);
 
 module.exports = app;
