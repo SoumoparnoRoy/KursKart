@@ -78,9 +78,17 @@ class ApiClient {
     );
   }
 
-  Future<Map<String, dynamic>> delete(String path, {String? token}) {
+  Future<Map<String, dynamic>> delete(
+    String path, {
+    Object? body,
+    String? token,
+  }) {
     return _send(
-      () => _http.delete(Uri.parse('$uri$path'), headers: _headers(token)),
+      () => _http.delete(
+        Uri.parse('$uri$path'),
+        headers: _headers(token),
+        body: body == null ? null : jsonEncode(body),
+      ),
     );
   }
 

@@ -10,6 +10,7 @@ import 'package:kurskart/providers/auth_provider.dart';
 import 'package:kurskart/providers/vendor_provider.dart';
 import 'package:kurskart/services/api_client.dart';
 import 'package:kurskart/services/manage_http_response.dart';
+import 'package:kurskart/services/upload_service.dart';
 import 'package:kurskart/views/widgets/labelled_field.dart';
 
 /// Adds a product, or edits one the vendor already sells.
@@ -36,12 +37,29 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   late final TextEditingController _price;
   late final TextEditingController _category;
   late final TextEditingController _stock;
+
+  /// Belongs to the "paste a link" dialog, but lives for as long as the screen
+  /// does — see [_pasteLink].
+  final _link = TextEditingController();
+
   bool _isSaving = false;
 
   /// The image as it will be stored: always a URL, whether it came from an
   /// upload or was pasted in. Null means the product has no image.
   String? _imageUrl;
   bool _isUploading = false;
+
+  /// An image uploaded during this visit that no product refers to yet. If it
+  /// is replaced, removed, or the vendor leaves without saving, it has to be
+  /// deleted from Cloudinary — nothing else would ever point at it.
+  ///
+  /// Cleared on save, at which point the product owns it and the server takes
+  /// over responsibility for cleaning it up.
+  String? _unsavedUpload;
+
+  /// Kept so the cleanup can still run from [dispose], where reading the token
+  /// asynchronously is no longer possible.
+  String? _token;
 
   @override
   void initState() {
@@ -57,10 +75,24 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
   @override
   void dispose() {
-    for (final c in [_name, _description, _price, _category, _stock]) {
+    // Leaving without saving: whatever was uploaded here is now unreachable.
+    _discardUnsavedUpload();
+
+    for (final c in [_name, _description, _price, _category, _stock, _link]) {
       c.dispose();
     }
     super.dispose();
+  }
+
+  /// Releases the pending upload, if there is one. Deliberately not awaited —
+  /// it runs from [dispose] as well, and the vendor should never wait on it.
+  void _discardUnsavedUpload() {
+    final url = _unsavedUpload;
+    final token = _token;
+    _unsavedUpload = null;
+
+    if (url == null || token == null) return;
+    const UploadService().discardUpload(token, url);
   }
 
   /// Picks an image and uploads it straight away, so by the time the vendor
@@ -91,13 +123,20 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     try {
       final token = await ref.read(tokenStorageProvider).read();
       if (token == null) throw const ApiException('Please sign in again.');
+      _token = token;
 
       final url = await ref
           .read(uploadServiceProvider)
           .uploadProductImage(token, File(picked.path));
 
+      // Whatever was uploaded a moment ago is now unreachable.
+      _discardUnsavedUpload();
+
       if (!mounted) return;
-      setState(() => _imageUrl = url);
+      setState(() {
+        _imageUrl = url;
+        _unsavedUpload = url;
+      });
       messenger.showSnackBar(const SnackBar(content: Text('Image uploaded')));
     } on ApiException catch (e) {
       if (mounted) showSnackBar(context, e.message);
@@ -109,7 +148,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   }
 
   Future<void> _pasteLink() async {
-    final controller = TextEditingController(text: _imageUrl ?? '');
+    // Owned by the screen rather than the dialog. Disposing it as soon as
+    // showDialog returns crashes the closing animation, which goes on
+    // rebuilding the TextField for a few frames after the result is in.
+    final controller = _link..text = _imageUrl ?? '';
 
     final url = await showDialog<String>(
       context: context,
@@ -134,8 +176,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       ),
     );
 
-    controller.dispose();
     if (url == null) return;
+
+    // A pasted link replaces any upload made here, stranding it.
+    _discardUnsavedUpload();
     setState(() => _imageUrl = url.isEmpty ? null : url);
   }
 
@@ -176,6 +220,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                 title: const Text('Remove image', style: TextStyle(color: Colors.red)),
                 onTap: () {
                   Navigator.pop(sheetContext);
+                  _discardUnsavedUpload();
                   setState(() => _imageUrl = null);
                 },
               ),
@@ -217,6 +262,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           images: images,
         );
       }
+      // Saved, so the product owns the image now and the server is responsible
+      // for it — dispose must not delete what was just stored.
+      _unsavedUpload = null;
+
       messenger.showSnackBar(
         SnackBar(
           content: Text(widget.isEditing ? 'Product updated' : 'Product added'),

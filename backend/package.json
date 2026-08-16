@@ -12,6 +12,7 @@
     "seed": "node seed.js",
     "seed:purge": "node seed-purge.js",
     "seed:repair": "node seed-repair.js",
+    "cloudinary:prune": "node cloudinary-prune.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {

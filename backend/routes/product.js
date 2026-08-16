@@ -1,14 +1,72 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const Order = require('../models/order');
 const Product = require('../models/product');
 const verifyToken = require('../middlewares/auth');
 const verifyVendor = require('../middlewares/vendor');
+const { publicIdFromUrl, destroyImage } = require('../cloudinary');
 
 
 const productRouter = express.Router();
 
 const MAX_LIMIT = 50;
 const DEFAULT_LIMIT = 20;
+
+// Deletes uploaded images that nothing refers to any more, after a product was
+// deleted or its photo changed. Anything not uploaded by us — a pasted link to
+// another site — has no public id and is skipped.
+//
+// An image an order line copied is deliberately kept. Orders record what was
+// actually bought, so a past order must keep showing its thumbnail even after
+// the product is gone; those assets are still in use, not orphans.
+//
+// Best effort by design: it never throws and its result is not reported to the
+// caller. Deleting a product must not fail because Cloudinary is having a bad
+// day, and the prune script exists to catch whatever leaks through.
+async function releaseImages(urls, { keepFor = null } = {}) {
+    const candidates = (urls ?? [])
+        .map((url) => ({ url, publicId: publicIdFromUrl(url) }))
+        .filter((c) => c.publicId);
+
+    if (candidates.length === 0) return;
+
+    try {
+        const stillUsed = new Set();
+
+        const inOrders = await Order.find(
+            { "items.image": { $in: candidates.map((c) => c.url) } },
+            { "items.image": 1 },
+        ).lean();
+
+        for (const order of inOrders) {
+            for (const item of order.items ?? []) {
+                if (item.image) stillUsed.add(item.image);
+            }
+        }
+
+        // The same URL can sit on another product — nothing stops a vendor
+        // pasting one product's image onto a second one.
+        const inProducts = await Product.find(
+            {
+                images: { $in: candidates.map((c) => c.url) },
+                ...(keepFor ? { _id: { $ne: keepFor } } : {}),
+            },
+            { images: 1 },
+        ).lean();
+
+        for (const product of inProducts) {
+            for (const image of product.images ?? []) stillUsed.add(image);
+        }
+
+        await Promise.all(
+            candidates
+                .filter((c) => !stillUsed.has(c.url))
+                .map((c) => destroyImage(c.publicId)),
+        );
+    } catch (e) {
+        console.error("Image cleanup failed:", e.message);
+    }
+}
 
 /// User input goes straight into a RegExp, so characters like ( or * must be
 /// neutralised or a stray bracket becomes a 500 (or a very expensive scan).
@@ -192,6 +250,15 @@ productRouter.patch('/api/products/:id', verifyToken, verifyVendor, async (req, 
             updates.images = Array.isArray(images) ? images : [];
         }
 
+        // Read first, so the images being replaced are known once the write has
+        // gone through. Only needed when the photo is actually changing.
+        const previous = images === undefined
+            ? null
+            : await Product.findOne(
+                { _id: req.params.id, store: req.store._id },
+                { images: 1 },
+            ).lean();
+
         const product = await Product.findOneAndUpdate(
             { _id: req.params.id, store: req.store._id },
             { $set: updates },
@@ -200,6 +267,18 @@ productRouter.patch('/api/products/:id', verifyToken, verifyVendor, async (req, 
 
         if (!product) {
             return res.status(404).json({ msg: "Product not found in your store" });
+        }
+
+        // Before responding, not after: on Vercel the function can be frozen as
+        // soon as the response ends, so anything awaited afterwards may simply
+        // never run. releaseImages swallows its own failures and gives up
+        // quickly, so this costs the vendor very little.
+        if (previous) {
+            const kept = new Set(product.images ?? []);
+            await releaseImages(
+                (previous.images ?? []).filter((url) => !kept.has(url)),
+                { keepFor: product._id },
+            );
         }
 
         res.json(product);
@@ -226,6 +305,8 @@ productRouter.delete('/api/products/:id', verifyToken, verifyVendor, async (req,
         if (!product) {
             return res.status(404).json({ msg: "Product not found in your store" });
         }
+
+        await releaseImages(product.images);
 
         // Past orders keep their snapshot, and carts holding this product have
         // the dangling line stripped on their next read.

@@ -140,6 +140,23 @@ the same reason, and because a review written by hand while signed in as a demo
 shopper would otherwise collide with the seeded one. Seeding resets stock to the
 seed values, and rebuilds the demo shoppers' order history from scratch.
 
+### Unused images
+
+```bash
+npm run cloudinary:prune
+```
+
+Lists product images on Cloudinary that no product and no order refers to. It
+deletes nothing without `--delete`, and away from localhost it also wants
+`SEED_ALLOW=yes`:
+
+```bash
+SEED_ALLOW=yes npm run cloudinary:prune -- --delete
+```
+
+The routes already clean up after themselves, so this is a backstop for uploads
+abandoned before a product was saved and for deletes that failed at the time.
+
 ### Frontend
 
 ```bash
@@ -204,6 +221,7 @@ https-only.
 | PATCH  | `/api/reviews/:id`              | `x-auth-token` | Edit your own review                 |
 | DELETE | `/api/reviews/:id`              | `x-auth-token` | Delete your own review               |
 | POST   | `/api/uploads/signature`        | vendor         | Permit to upload one product image   |
+| DELETE | `/api/uploads`                  | vendor         | Drop an upload never saved on a product |
 
 Every cart mutation returns the full cart, so a client never needs a follow-up
 read. Prices are whole rupees stored as integers.
@@ -252,8 +270,28 @@ and the API secret never leaves the server. The bytes never pass through the
 backend at all, which matters on Vercel, where a serverless request body is
 capped well below what a phone camera produces. The product itself still stores
 nothing but a URL, so pasted links and the seeded catalogue keep working
-unchanged. Uploaded images are not deleted from Cloudinary when a product is
-deleted or its photo replaced.
+unchanged.
+
+Uploaded images are **deleted from Cloudinary when nothing refers to them any
+more**: when a product is deleted, when its photo is replaced, and — through
+`DELETE /api/uploads` — when a vendor picks a photo and then changes their mind
+before saving, which is the case that would otherwise strand an upload no row
+ever pointed at. The asset to delete is derived from the stored URL rather than
+kept in a separate field, so external links are skipped automatically and images
+uploaded before this existed are cleanable too.
+
+**An image any order line copied is never deleted.** Orders record what was
+actually bought, so removing the asset behind a past order's thumbnail would
+rewrite history — exactly what copying the image at purchase time prevents.
+Those images stay for good, which is correct: they are still in use.
+
+Cleanup is best effort and runs before the response, since a serverless function
+can be frozen the moment it replies. It swallows its own failures — Cloudinary
+being down must not stop a vendor deleting a product. `npm run cloudinary:prune`
+is the backstop: it lists every asset under `kurskart/products`, compares it with
+what products and orders reference, and reports what is unused. It deletes
+nothing without `--delete`, and on a non-localhost database it also wants
+`SEED_ALLOW=yes`, since it reads the live catalogue to decide what is unused.
 
 Owning a store is what makes an account a vendor — `POST /api/stores` sets the
 role as a side effect, and there is one store per user. Vendor routes scope

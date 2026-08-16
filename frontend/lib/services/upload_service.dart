@@ -85,4 +85,19 @@ class UploadService {
     }
     return url;
   }
+
+  /// Deletes an image that was uploaded but never saved onto a product —
+  /// the vendor picked a photo and then replaced or removed it. Without this
+  /// the first upload is stranded, since nothing ever referenced it.
+  ///
+  /// Silent by design: it is housekeeping the vendor did not ask for, so a
+  /// failure is not worth a message. `npm run cloudinary:prune` catches
+  /// whatever this misses.
+  Future<void> discardUpload(String token, String url) async {
+    try {
+      await _client.delete('/api/uploads', token: token, body: {'url': url});
+    } catch (_) {
+      // Ignored on purpose.
+    }
+  }
 }
