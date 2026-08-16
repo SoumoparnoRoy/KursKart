@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
+import 'package:kurskart/global_variables.dart';
 import 'package:kurskart/models/cart.dart';
 import 'package:kurskart/models/order.dart';
 import 'package:kurskart/models/product.dart';
@@ -9,7 +12,7 @@ import 'package:kurskart/models/review.dart';
 import 'package:kurskart/models/user.dart';
 import 'package:kurskart/providers/auth_provider.dart';
 import 'package:kurskart/providers/product_provider.dart';
-import 'package:kurskart/services/auth_service.dart';
+import 'package:kurskart/services/api_client.dart';
 import 'package:kurskart/services/product_service.dart';
 import 'package:kurskart/views/screens/authetication_screens/login_screen.dart';
 import 'package:kurskart/views/screens/authetication_screens/register_screen.dart';
@@ -534,6 +537,44 @@ void main() {
       const e = ApiException('User not found with this email');
       expect(e.message, 'User not found with this email');
       expect(e.toString(), 'User not found with this email');
+    });
+  });
+
+  group('ApiClient', () {
+    test('base URL never ends in a slash', () {
+      // A trailing one builds //api/signin, which Vercel 308s away from.
+      expect(uri.endsWith('/'), isFalse);
+    });
+
+    test('builds paths against the base URL exactly once', () async {
+      late Uri requested;
+      final client = ApiClient(
+        client: MockClient((request) async {
+          requested = request.url;
+          return http.Response('{"ok":true}', 200);
+        }),
+      );
+
+      await client.post('/api/signin');
+      expect(requested.toString(), '$uri/api/signin');
+      expect(requested.path, '/api/signin');
+    });
+
+    test('reports a redirect as a configuration problem', () async {
+      final client = ApiClient(
+        client: MockClient(
+          (_) async => http.Response('Redirecting...', 308),
+        ),
+      );
+
+      await expectLater(
+        client.post('/api/signin'),
+        throwsA(
+          isA<ApiException>()
+              .having((e) => e.statusCode, 'statusCode', 308)
+              .having((e) => e.message, 'message', contains('API_URL')),
+        ),
+      );
     });
   });
 

@@ -112,6 +112,18 @@ class ApiClient {
       );
     }
 
+    // Dart follows redirects on GET but not on POST, PATCH or DELETE, so a
+    // redirect arrives here as the response. The body is the host's own plain
+    // text, which would otherwise fail to decode and surface as a bare status
+    // code. It always means API_URL is wrong, so say that instead.
+    if (response.statusCode >= 300 && response.statusCode < 400) {
+      throw ApiException(
+        'The server redirected the request (${response.statusCode}). '
+        'Check that API_URL is https and has no trailing slash.',
+        statusCode: response.statusCode,
+      );
+    }
+
     Map<String, dynamic> body;
     try {
       body = jsonDecode(response.body) as Map<String, dynamic>;
